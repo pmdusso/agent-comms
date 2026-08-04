@@ -26,6 +26,6 @@ Antes de agir:
 ./comms.py post --de arch --para todos --tipo decisao --titulo "..." --corpo "..."
 ```
 
-Mantenha work items e decisões no `comms.db`. Não amplie escopo, faça commit, deploy ou merge sem autorização de `pedro`. Ao terminar, resolva os turnos atendidos e registre o próximo handoff. Nunca grave segredos ou PII no canal.
+Mantenha work items e decisões no `comms.db`. Não amplie escopo, faça commit, deploy ou merge sem autorização de `owner`. Ao terminar, resolva os turnos atendidos e registre o próximo handoff. Nunca grave segredos ou PII no canal.
 
 Comece sincronizando o estado e execute apenas o trabalho já aprovado.

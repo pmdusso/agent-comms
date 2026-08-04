@@ -15,7 +15,7 @@ publicados e card **Ready** — **sem** implementar produto ou fazer deploy.
 
 **Invariante B (Assumptions):** perguntas reversíveis e não sensíveis não
 bloqueiam Ready. Registre hipótese + risco + como invalidar; implementação trata
-a hipótese como requisito até Pedro contradizer. Decisões de billing/preço,
+a hipótese como requisito até `owner` contradizer. Decisões de billing/preço,
 segurança, compliance/retenção, contrato externo, custo material ou efeito
 irreversível continuam bloqueantes.
 
@@ -62,7 +62,7 @@ parar e reconciliar.
   redigido sem autorização explícita.
 - Graves/médios do review **devem ser incorporados** antes de avançar (G1/G2).
 - Artefatos em `docs/specs/` e `docs/plans/` (padrão do repo).
-- Commits/push dos docs: só com GO do Pedro; sem publicação acessível ao próximo
+- Commits/push dos docs: só com GO do `owner`; sem publicação acessível ao próximo
   agente, o card não pode virar Ready.
 - Registrar gates/handoffs no `comms.db` e reconciliar comms + docs + board em
   toda transição de estado.
@@ -173,7 +173,7 @@ Atualizar a issue (`gh issue edit`) com:
 1. **Pergunta:** …
    - **Hipótese adotada:** …
    - **Risco se errada:** …
-   - **Como invalidar:** Pedro / dado / spike
+   - **Como invalidar:** `owner` / dado / spike
 (Se não houver perguntas abertas: `Nenhuma — spec/plano fechados.`)
 
 ## Sequência
@@ -198,7 +198,7 @@ Depois:
 ```
 
 4. Se qualquer fonte divergir, corrigir antes de reportar Ready.
-5. Reportar ao Pedro: URL da issue, paths, Assumptions em destaque, próximo passo (SDD / executing-plans).
+5. Reportar ao `owner`: URL da issue, paths, Assumptions em destaque, próximo passo (SDD / executing-plans).
 
 ---
 
@@ -207,10 +207,10 @@ Depois:
 - Review G1/G2 ainda com grave **não** incorporado → corrigir antes.
 - Decompose incompleto (escopo ainda multi-subsistema) → não Ready na issue inchada.
 - Falta de artefato publicado (spec ou plano no ramo full) → não Ready.
-- Assumption sensível, material ou irreversível → esperar decisão do Pedro.
+- Assumption sensível, material ou irreversível → esperar decisão do `owner`.
 - Comms, docs e board divergentes → reconciliar antes.
 
-**Não** é stop condition: espera por resposta do Pedro sobre hipótese
+**Não** é stop condition: espera por resposta do `owner` sobre hipótese
 reversível e não sensível (invariante B).
 
 ## Related

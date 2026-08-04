@@ -28,16 +28,22 @@ from string import Template
 # ==============================================================================
 # CONFIGURAÇÃO DE COMUNICAÇÃO DE AGENTES (SQLITE CHATTER / SYNC)
 # ==============================================================================
-__version__ = "2.2.0"
+__version__ = "3.0.0"
+
+# ATENÇÃO: todas as tuplas desta seção viram CHECKs no DDL. Banco existente mantém
+# os CHECKs antigos — após mudar tuplas, rode ./comms.py bootstrap --force (zera
+# dados). v3.0.0 renomeou o sender "pedro" para "owner": bancos criados em v2.x
+# rejeitam "owner" até serem recriados.
 
 # RECOMENDAÇÃO: Sempre defina um agente central de coordenação ("arch") encarregado
 # de ler/escrever tarefas, interagir com Jira/Github/PRs, e delegar escopos, e
 # adicione os agentes especialistas do seu ecossistema.
-SENDERS = ("arch", "pm", "dev", "tester", "reviewer", "pedro")
+# "owner" é o humano dono da decisão final (merge/deploy). Não confundir com a
+# coluna work_items.owner (papel responsável por um item) nem com a chave kv
+# board.owner (dono do GitHub Project) — três coisas distintas, mesmo nome.
+SENDERS = ("arch", "pm", "dev", "tester", "reviewer", "owner")
 RECIPIENTS = SENDERS + ("todos",)  # "todos" é broadcast, nunca remetente
 
-# ATENÇÃO: as tuplas abaixo viram CHECKs no DDL. Banco existente mantém os CHECKs
-# antigos — após mudar tuplas, rode ./comms.py bootstrap --force (zera dados).
 KINDS = ("mensagem", "decisao", "bloqueio", "handoff", "pergunta", "gate")
 STATUSES = ("aberto", "bloqueado", "feito", "debito")
 WORK_ITEM_SCOPES = ("arch", "pm", "dev", "tester", "reviewer", "cross")
@@ -177,7 +183,7 @@ Sempre que um agente ou humano iniciar uma sessão ou turno neste repositório, 
 | `dev` | implementação e documentação técnica |
 | `tester` | estratégia de testes, validação executável e aceite |
 | `reviewer` | revisão independente de correção, segurança e simplicidade |
-| `pedro` | direção de produto e decisões humanas finais |
+| `owner` | direção de produto e decisões humanas finais |
 
 ---
 
@@ -654,7 +660,7 @@ def cmd_finish(db, a):
         "INSERT INTO turns (sender, recipient, kind, title, body, refs) VALUES ('dev', 'reviewer', 'gate', ?, ?, ?)",
         (
             f"PR pronto #{issue_num}",
-            f"PR={pr_url}; entrega concluída e aguardando G4/G5 (review + merge do Pedro).",
+            f"PR={pr_url}; entrega concluída e aguardando G4/G5 (review + merge do owner).",
             f"issue:{issue_num} pr:{pr_url}",
         ),
     )
@@ -942,7 +948,7 @@ def check():
 
             with open("docs/core/AGENT_COMMS.md", "r", encoding="utf-8") as f:
                 md_content = f.read()
-                assert "arch, pm, dev, tester, reviewer, pedro" in md_content
+                assert "arch, pm, dev, tester, reviewer, owner" in md_content
                 assert "todos" in md_content
 
             with open(".gitignore", "r", encoding="utf-8") as f:
