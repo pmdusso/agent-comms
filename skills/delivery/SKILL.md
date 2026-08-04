@@ -3,7 +3,7 @@ name: delivery
 description: >-
   Execute a Ready GitHub Project card through implementation: worktree,
   follow the linked plan via subagent-driven-development (preferred) or
-  executing-plans, run tests/ruff, Cubic review + optional
+  executing-plans, run the repo suite, Cubic review + optional
   ai-review, open a PR, move the card to In review. Use when the user says
   deliver/execute/implement a Ready ticket, "pega o #N Ready", or run the plan
   for a board card.
@@ -61,9 +61,12 @@ está no board — adicionar e consultar de novo.
 - Testes:
 
 ```bash
-uvx --with-requirements requirements.txt pytest tests/ -q
-ruff check scripts tests
+$(./comms.py testcmd)
 ```
+
+O comando sai de `test.cmd` no `comms.db`, ou da convenção do ecossistema
+(`Makefile` com alvo `test`, `pyproject.toml`, `package.json`, `Cargo.toml`,
+`go.mod`). Ajuste com `./comms.py set test.cmd "..."` se o repo fugir do padrão.
 
 - Comandos de cloud (`gcloud`, `aws`, `firebase`) sempre com conta e projeto
   explícitos — nunca no default ambiente. Deploy só com GO.
@@ -116,7 +119,7 @@ ou subagents falharam.
 ### Por task (ambos os modos)
 
 1. TDD quando o plano exige (RED → GREEN).
-2. Suite focada + ruff nos arquivos tocados; suite relevante antes do PR.
+2. Suíte focada + linter nos arquivos tocados; suíte relevante antes do PR.
 3. Commit atômico (mensagem no estilo do repo); sem `--no-verify`.
 4. Se finding grave no review de task → fix antes da próxima.
 

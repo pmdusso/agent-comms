@@ -12,6 +12,7 @@ Uso rápido:
   ./comms.py agents                                 # roster (= docs/prompts/*.md)
   ./comms.py brief dev                              # prompt + estado, num blob só
   ./comms.py gate [--refs issue:42]                 # F4/G3/G4; exit 1 se reprovar
+  ./comms.py trunk    ./comms.py testcmd            # tronco e suíte, sem chutar
   ./comms.py bootstrap                              # inicializar repositório (db + manual)
   ./comms.py check                                  # self-test em banco temporário
 
@@ -843,6 +844,51 @@ def cmd_board_set(db, a):
 FINDING_RE = re.compile(rf"^\[({'|'.join(SEVERITIES)})\]", re.IGNORECASE)
 
 
+# Convenção por ecossistema, na ordem em que um repo poliglota deve ser lido.
+# Só palpite: `./comms.py set test.cmd "..."` tem precedência e é a resposta certa
+# em qualquer repo que fuja do padrão.
+TEST_CMD_HINTS = (
+    ("Makefile", "make test"),
+    ("pyproject.toml", "uv run pytest -q"),
+    ("package.json", "npm test"),
+    ("Cargo.toml", "cargo test"),
+    ("go.mod", "go test ./..."),
+)
+
+
+def test_command(db):
+    """Comando que roda a suíte deste repositório, ou None se não der para saber."""
+    override = _kv_get(db, "test.cmd")
+    if override:
+        return override
+    root = Path(DB_PATH).parent
+    for arquivo, cmd in TEST_CMD_HINTS:
+        alvo = root / arquivo
+        if not alvo.exists():
+            continue
+        # Makefile sem alvo `test` mandaria o agente rodar um comando que não existe.
+        if arquivo == "Makefile" and not re.search(
+            r"^test\s*:", alvo.read_text(encoding="utf-8", errors="ignore"), re.M
+        ):
+            continue
+        return cmd
+    return None
+
+
+def cmd_testcmd(db, _a):
+    """Suíte do repo, para prompts e skills não fixarem pytest/npm/make.
+
+    Uso nos comandos: $(./comms.py testcmd)
+    """
+    cmd = test_command(db)
+    if not cmd:
+        sys.exit(
+            "ERRO: não deu para inferir o comando de teste deste repositório.\n"
+            '  ./comms.py set test.cmd "<comando>"'
+        )
+    print(cmd)
+
+
 def cmd_trunk(_db, _a):
     """Nome do tronco, para os docs e skills não chutarem 'main'.
 
@@ -1323,6 +1369,13 @@ def check():
                 (r"-R\s+[\w.-]+/[\w.-]+", "repo fixo no gh — deixe o gh resolver"),
                 (r"PVT[A-Z]*_", "node id de GitHub Project"),
                 (r"--(project|field)-id\s+\S", "id de board fixo — use board-item/board-set"),
+                (
+                    # `\./test-all` fica fora do \b inicial: não há fronteira de palavra
+                    # antes de um ponto, então dentro do grupo ele nunca casaria.
+                    r"\b(pytest|uvx|ruff|make test|npm (test|run)|yarn test|go test"
+                    r"|cargo test)\b|\./test-all\b",
+                    "runner de teste fixo — use $(./comms.py testcmd)",
+                ),
             )
             vazamentos = [
                 f"{f.relative_to(pack)}:{i}: {porque} → {linha.strip()[:70]}"
@@ -1331,7 +1384,8 @@ def check():
                     f.read_text(encoding="utf-8").splitlines(), start=1
                 )
                 for padrao, porque in proibidos
-                if re.search(padrao, linha)
+                # A linha que ensina o resolvedor cita o que ele substitui.
+                if re.search(padrao, linha) and "comms.py testcmd" not in linha
             ]
             assert not vazamentos, "literais não-portáveis nos docs:\n" + "\n".join(
                 vazamentos
@@ -1555,6 +1609,7 @@ def main():
 
     sub.add_parser("agents", help="listar o roster (um agente por docs/prompts/*.md)")
     sub.add_parser("trunk", help="imprimir o branch tronco do repo (nunca assume main)")
+    sub.add_parser("testcmd", help="imprimir o comando de teste do repo (kv test.cmd ou convenção)")
 
     sp = sub.add_parser("brief", help="prompt + estado + turnos de um agente, num blob só")
     sp.add_argument("agente", choices=SENDERS)
@@ -1585,7 +1640,7 @@ def main():
     # board-sync escreve no kv; board-item só lê.
     is_read_only = a.cmd in (
         "turns", "show", "items", "state", "board-item", "agents", "brief", "gate",
-        "trunk",
+        "trunk", "testcmd",
     )
     db = connect(read_only=is_read_only)
     try:
@@ -1609,6 +1664,7 @@ def main():
             "brief": cmd_brief,
             "gate": cmd_gate,
             "trunk": cmd_trunk,
+            "testcmd": cmd_testcmd,
         }[a.cmd](db, a)
     finally:
         if not is_read_only:

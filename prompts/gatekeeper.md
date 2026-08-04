@@ -22,7 +22,7 @@ git -C .worktrees/<worktree> status -sb        # tem que estar limpo e syncado c
 git -C .worktrees/<worktree> show <sha-fix>    # cada correção alegada existe no diff?
 
 # 3. Re-rodar a suíte você mesmo, na worktree:
-make test          # ou a suíte do seu repo: ./test-all, uv run pytest, npm test
+$(./comms.py testcmd)   # make test / uv run pytest / npm test — conforme o repo
 
 # 4. Conferir PR e CI:
 gh pr view <N> --json state,mergeable,mergeStateStatus,statusCheckRollup

@@ -134,6 +134,20 @@ git diff $(./comms.py trunk)...HEAD
 ./comms.py start 42 --base outro-branch   # override pontual
 ```
 
+O mesmo vale para a suíte de testes. `./comms.py testcmd` sai do kv `test.cmd`,
+ou da convenção do ecossistema — `Makefile` com alvo `test`, `pyproject.toml`,
+`package.json`, `Cargo.toml`, `go.mod`, nessa ordem. Se não der para inferir, ele
+falha pedindo a configuração em vez de chutar um comando que não existe:
+
+```bash
+./comms.py testcmd                        # ex: uv run pytest -q
+./comms.py set test.cmd "just ci"         # repo fora do padrão
+```
+
+Prompts e skills escrevem `$(./comms.py testcmd)` — assim o mesmo prompt roda a
+suíte certa num repo Python, num Node e num Go. O `./comms.py check` reprova se
+um runner fixo (`pytest`, `npm test`, `make test`…) reaparecer nos docs.
+
 ---
 
 ## 💻 Guia Rápido de Comandos CLI (`comms.py`)

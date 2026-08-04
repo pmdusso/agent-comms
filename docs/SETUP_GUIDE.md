@@ -79,7 +79,7 @@ cp docs/prompts/dev.md docs/prompts/dba.md   # e edite
 ./comms.py start 42
 
 # 3. Desenvolver e testar na worktree criada em .worktrees/issue-42-...:
-make test          # ou a suíte do seu repo: ./test-all, uv run pytest, npm test
+$(./comms.py testcmd)   # make test / uv run pytest / npm test — conforme o repo
 
 # 4. Toda finding do review tem que ter destino antes do PR (exit 1 se não):
 ./comms.py gate --refs issue:42

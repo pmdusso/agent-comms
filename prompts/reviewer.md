@@ -17,7 +17,7 @@ Antes de agir:
 ./comms.py board-sync
 
 # 2. Rodar preflight e linters locais:
-make test          # ou a suíte do seu repo: ./test-all, uv run pytest, npm test
+$(./comms.py testcmd)   # make test / uv run pytest / npm test — conforme o repo
 cubic review --base $(./comms.py trunk) --json
 
 # 3. Registrar parecer do gate no comms.db:

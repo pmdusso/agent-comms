@@ -17,7 +17,7 @@ Antes de agir:
 ./comms.py board-sync
 
 # 2. Executar suíte completa de testes e cobertura:
-make test          # ou a suíte do seu repo: ./test-all, uv run pytest, npm test
+$(./comms.py testcmd)   # make test / uv run pytest / npm test — conforme o repo
 
 # 3. Registrar falha ou resultado de aceite no comms.db:
 ./comms.py post --de tester --para dev --tipo bloqueio --titulo "[grave] Bug ..." --corpo "Passos..."

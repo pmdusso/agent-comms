@@ -20,7 +20,7 @@ Antes de agir:
 cd .worktrees/issue-<N>-<slug>
 
 # 3. Rodar suíte local de testes e linters:
-make test          # ou a suíte do seu repo: ./test-all, uv run pytest, npm test
+$(./comms.py testcmd)   # make test / uv run pytest / npm test — conforme o repo
 
 # 4. Criar o PR e finalizar a entrega (Board -> In review + Comentário GitHub + comms.db):
 git push -u origin HEAD
