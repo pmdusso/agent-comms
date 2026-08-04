@@ -1,0 +1,4 @@
+comms.db
+comms.db-wal
+comms.db-shm
+.worktrees/
