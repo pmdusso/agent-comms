@@ -3,7 +3,7 @@ name: delivery
 description: >-
   Execute a Ready GitHub Project card through implementation: worktree,
   follow the linked plan via subagent-driven-development (preferred) or
-  executing-plans, run tests/ruff, Cubic pre-flight, CodeRabbit + optional
+  executing-plans, run tests/ruff, Cubic review + optional
   ai-review, open a PR, move the card to In review. Use when the user says
   deliver/execute/implement a Ready ticket, "pega o #N Ready", or run the plan
   for a board card.
@@ -22,8 +22,7 @@ sem GO explícito do `human`.
 | Isolamento | **worktree** (`.worktrees/…`) | Protege o tronco; casa com SDD |
 | Executor de plano | **subagent-driven-development** | Review por task; melhor que sessão monolítica |
 | Fallback | **executing-plans** | Só se subagents indisponíveis ou `human` pedir inline |
-| Pre-flight local | **Cubic** (`cubic review --base $(./comms.py trunk)`) | Consultivo; rápido; não bloqueia se indisponível |
-| Review de código | **CodeRabbit** (`coderabbit review --agent`) | Diff-focused; skill `code-review` |
+| Review de código | **Cubic** (`cubic review --base $(./comms.py trunk)`) | Diff-focused; findings viram work_item |
 | Review extra | **ai-review** `-a balanced` no diff | Só se tocar auth/billing/compliance/purge/TTL |
 | Integração | **PR** (`gh pr create`) + Status **In review** | Merge = `human` (G5) |
 | Assumptions (B) | Tratar como **requisitos** | Até `human` invalidar; não reinventar discovery |
@@ -69,7 +68,7 @@ ruff check scripts tests
 - Comandos de cloud (`gcloud`, `aws`, `firebase`) sempre com conta e projeto
   explícitos — nunca no default ambiente. Deploy só com GO.
 - Nunca `git clean -x`. Sem force-push no tronco.
-- Antes de Cubic, CodeRabbit ou ai-review, limitar o alvo, inspecionar
+- Antes de Cubic ou ai-review, limitar o alvo, inspecionar
   segredos/PII e obter confirmação explícita para alvo + provedor. Se não puder
   sanear, parar; conteúdo não redigido exige autorização explícita.
 - Registrar gates/handoffs no `comms.db` e reconciliar comms + docs + board em
@@ -133,34 +132,31 @@ Inspecionar somente `git diff $(./comms.py trunk)...HEAD` e os arquivos alvo. N�
 untracked alheio. Verificar segredos, credenciais e PII antes de qualquer envio;
 se houver dúvida ou a redação mudar o sentido do review, parar e pedir decisão.
 
-### 3b) Cubic (consultivo se houver diff de código)
-
-Rodar uma vez antes do CodeRabbit, se instalado e autenticado:
+### 3b) Cubic (obrigatório se houver diff de código)
 
 ```bash
+cubic --version 2>/dev/null || echo "NOT_INSTALLED"
+# na worktree, contra o tronco:
 cubic review --base $(./comms.py trunk) --json
+# sem --base, revisa o que está uncommitted; --prompt combina com --base
+# para instruções extras; --commit <sha> revisa um commit específico
 ```
 
-Validar cada finding antes de corrigir e repetir no máximo uma vez. Falha de
-instalação, autenticação ou rate limit não bloqueia G3: registrar o skip e seguir.
-Na versão instalada, `--prompt` pode complementar `--base`; confirmar em
-`cubic review --help` após upgrades, pois a CLI ainda evolui rapidamente.
+Validar cada finding antes de corrigir — a CLI erra como qualquer review — e
+repetir no máximo uma vez. Corrigir o que for correção real; o resto vira
+work_item com prefixo de severidade, para o `./comms.py gate` cobrar destino.
 
-### 3c) CodeRabbit (obrigatório se houver diff de código)
-
-Skill `code-review`:
+Se o Cubic não estiver instalado, autenticado, ou bater rate limit, **registrar
+o skip** no canal e seguir — mas não passar calado, que é o oposto da política:
 
 ```bash
-coderabbit --version 2>/dev/null || echo "NOT_INSTALLED"
-coderabbit auth status 2>&1
-# na worktree / repo:
-coderabbit review --agent --base $(./comms.py trunk)
-# ou: coderabbit review --agent -t uncommitted
+./comms.py post --de dev --para reviewer --tipo gate \
+  --titulo "G3 sem Cubic #<N>" --corpo "motivo: <NOT_INSTALLED|auth|rate limit>"
 ```
 
-Corrigir **Critical** e **Warning**. Re-rodar até limpo ou só Info.
+A CLI ainda evolui rápido: conferir `cubic review --help` depois de upgrades.
 
-### 3d) ai-review no diff (condicional)
+### 3c) ai-review no diff (condicional)
 
 Rodar se o diff tocar área sensível: auth, billing, purge/TTL, KMS, webhooks,
 mensagens ao usuário final, ou invariantes de arquitetura documentados no repo:
@@ -172,7 +168,7 @@ git diff $(./comms.py trunk)...HEAD | ai-review --redact -a balanced -t pr-revie
 
 Incorporar graves/médios.
 
-### 3e) Gate reviewer do canal
+### 3d) Gate reviewer do canal
 
 Se o commit exigir gate (scripts/tests/copy/spec): preparar digest/turno para
 `reviewer` conforme prática do repo — **não** fingir APPROVE.
@@ -226,7 +222,7 @@ STOP e perguntar ao `human` se:
 - Assumption invalida comportamento observado / teste
 - Plano tem gap que impede a task
 - Precisa deploy, secret, Meta/Strava, ou mudança de invariante não prevista
-- CodeRabbit/ai-review exigem redesign (não um fix local)
+- Cubic/ai-review exigem redesign (não um fix local)
 - Comms, docs e board não podem ser reconciliados
 
 ---
@@ -253,4 +249,4 @@ STOP e perguntar ao `human` se:
 Related: `docs/core/PIPELINE.md`, `brainstorming` (só se escopo mudar — senão
 voltar discovery), `writing-plans` (não reescrever plano sem pedido),
 `subagent-driven-development`, `executing-plans`, `using-git-worktrees`,
-`code-review`, `finishing-a-development-branch`, `ai-review`, Cubic CLI.
+`finishing-a-development-branch`, `ai-review`, Cubic CLI.

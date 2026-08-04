@@ -41,7 +41,7 @@ gh pr checks <N>
 - Cada correção alegada pelo reviewer está presente no diff final (cite arquivo:linha ao confirmar).
 - Âncoras e referências de documentação (ex.: `gateway.py:31-42`) batem com o código real.
 - Suíte do repositório verde na sua mão: testes, cobertura ≥ piso ratchet, lint, contratos.
-- Todos os required checks do PR verdes; CodeRabbit sem findings abertos.
+- Todos os required checks do PR verdes; Cubic sem findings abertos (ou cada um com destino — confira com `./comms.py gate`).
 - PR: base no tronco (`./comms.py trunk`), MERGEABLE/CLEAN, branch atualizada, worktree sem sujeira não commitada.
 - Título do PR em inglês no formato Conventional (`type(scope): description (#N)`) — o merge é por squash e o título vira a mensagem final. Corrija você mesmo com `gh pr edit` se estiver fora do padrão.
 - Escopo: um assunto por PR; nada fora do card.

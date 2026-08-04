@@ -14,7 +14,7 @@ Ela permite rodar sessões multi-agente eficientes, paralelas e determinísticas
 - 🗄️ **Banco SQLite Durável (`comms.db`):** Armazena turnos, decisões, bloqueios, itens pendentes e históricos de gates entre personas de agentes sem poluir o repositório Git.
 - 🛠️ **Skills Autónomas de Pipeline:**
   - **`discovery`:** Automação do funil F1→F2 (Backlog ➔ Ready). Triagem, alinhamento, especificação, invariantes e publicação do card como `Ready`.
-  - **`delivery`:** Automação do funil F3→F5 (Ready ➔ In review / PR). Worktree efêmera, ciclo TDD/testes, revisão de código, CodeRabbit, abertura de PR e movimentação do board.
+  - **`delivery`:** Automação do funil F3→F5 (Ready ➔ In review / PR). Worktree efêmera, ciclo TDD/testes, review de código com Cubic, abertura de PR e movimentação do board.
 
 - 🎭 **Prompts de Personas Especializadas:**
   - `arch.md`: Arquiteto responsável pelas decisões de design, invariantes e diretivas.
