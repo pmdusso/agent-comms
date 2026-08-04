@@ -28,25 +28,24 @@ from string import Template
 # ==============================================================================
 # CONFIGURAÇÃO DE COMUNICAÇÃO DE AGENTES (SQLITE CHATTER / SYNC)
 # ==============================================================================
-__version__ = "3.0.0"
+__version__ = "4.0.0"
 
-# ATENÇÃO: todas as tuplas desta seção viram CHECKs no DDL. Banco existente mantém
-# os CHECKs antigos — após mudar tuplas, rode ./comms.py bootstrap --force (zera
-# dados). v3.0.0 renomeou o sender "pedro" para "owner": bancos criados em v2.x
-# rejeitam "owner" até serem recriados.
+# O ROSTER DE AGENTES É O CONTEÚDO DE docs/prompts/. Onboardear um agente ad-hoc
+# no meio da sessão = criar docs/prompts/<nome>.md. Nada aqui precisa mudar, e o
+# banco não precisa ser recriado: sender/recipient/owner NÃO têm CHECK no DDL
+# justamente para o roster poder crescer sem migração destrutiva. A proteção
+# contra typo vive no argparse (`choices`), que lê o roster a cada invocação.
+#
+# RECOMENDAÇÃO: mantenha um agente central de coordenação ("arch") encarregado de
+# ler/escrever tarefas, interagir com Jira/Github/PRs e delegar escopos.
+DEFAULT_ROSTER = ("arch", "pm", "dev", "tester", "reviewer")
+HUMAN = "human"  # dono da decisão final (merge/deploy); não tem prompt, é gente
+BROADCAST = "todos"  # destinatário coletivo, nunca remetente
 
-# RECOMENDAÇÃO: Sempre defina um agente central de coordenação ("arch") encarregado
-# de ler/escrever tarefas, interagir com Jira/Github/PRs, e delegar escopos, e
-# adicione os agentes especialistas do seu ecossistema.
-# "owner" é o humano dono da decisão final (merge/deploy). Não confundir com a
-# coluna work_items.owner (papel responsável por um item) nem com a chave kv
-# board.owner (dono do GitHub Project) — três coisas distintas, mesmo nome.
-SENDERS = ("arch", "pm", "dev", "tester", "reviewer", "owner")
-RECIPIENTS = SENDERS + ("todos",)  # "todos" é broadcast, nunca remetente
-
+# ATENÇÃO: as tuplas abaixo VIRAM CHECKs no DDL — são política fechada, não roster.
+# Mudá-las exige ./comms.py bootstrap --force (zera dados) ou ./comms.py migrate.
 KINDS = ("mensagem", "decisao", "bloqueio", "handoff", "pergunta", "gate")
 STATUSES = ("aberto", "bloqueado", "feito", "debito")
-WORK_ITEM_SCOPES = ("arch", "pm", "dev", "tester", "reviewer", "cross")
 
 # Binding papel→CLI do pipeline de entrega (PIPELINE.md). Troque os CLIs livremente
 # para testar modelos diferentes — a política não muda, só o binding.
@@ -108,6 +107,31 @@ def resolve_db_path() -> str:
 
 
 DB_PATH = resolve_db_path()
+PROMPTS_DIR = Path(DB_PATH).parent / "docs" / "prompts"
+
+
+def agent_roster():
+    """Papéis que podem postar no canal: um por arquivo em docs/prompts/.
+
+    Onboardear um agente ad-hoc é criar o prompt dele — o passo que você ia dar de
+    qualquer jeito. Assim o prompt e a permissão de postar nunca divergem.
+
+    Fallback para DEFAULT_ROSTER quando docs/prompts/ não existe (repositório ainda
+    não instalado), para o CLI continuar utilizável antes do primeiro prompt.
+    """
+    names = (
+        sorted(p.stem for p in PROMPTS_DIR.glob("*.md")) if PROMPTS_DIR.is_dir() else []
+    )
+    if not names:
+        names = list(DEFAULT_ROSTER)
+    if HUMAN not in names:
+        names.append(HUMAN)
+    return tuple(names)
+
+
+SENDERS = agent_roster()
+RECIPIENTS = SENDERS + (BROADCAST,)
+WORK_ITEM_SCOPES = SENDERS + ("cross",)
 
 
 def _sql_in(values):
@@ -119,11 +143,14 @@ def _sql_in(values):
     return "(" + ", ".join(f"'{v}'" for v in values) + ")"
 
 
+# sender/recipient/owner/scope são TEXT puro de propósito: o roster muda em runtime
+# (ver agent_roster) e um CHECK aqui congelaria os papéis no schema. Validação de
+# typo é do argparse. kind/status seguem com CHECK — são política, não roster.
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS turns (
   id INTEGER PRIMARY KEY,
-  sender TEXT NOT NULL CHECK (sender IN {_sql_in(SENDERS)}),
-  recipient TEXT NOT NULL CHECK (recipient IN {_sql_in(RECIPIENTS)}),
+  sender TEXT NOT NULL,
+  recipient TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN {_sql_in(KINDS)}),
   title TEXT NOT NULL,
   body TEXT NOT NULL,
@@ -134,8 +161,8 @@ CREATE TABLE IF NOT EXISTS turns (
 CREATE TABLE IF NOT EXISTS work_items (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
-  owner TEXT NOT NULL CHECK (owner IN {_sql_in(SENDERS)}),
-  scope TEXT NOT NULL CHECK (scope IN {_sql_in(WORK_ITEM_SCOPES)}),
+  owner TEXT NOT NULL,
+  scope TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN {_sql_in(STATUSES)}),
   blocker TEXT,
   refs TEXT,
@@ -168,13 +195,31 @@ Sempre que um agente ou humano iniciar uma sessão ou turno neste repositório, 
 ---
 
 ## Estrutura do Canal
-* **Remetentes Permitidos (Senders):** $SENDERS
-* **Destinatários Permitidos (Recipients):** $RECIPIENTS
+* **Remetentes (Senders):** $SENDERS — **derivado de `docs/prompts/*.md`**, não fixo
+* **Destinatários (Recipients):** os senders + `todos` (broadcast, nunca remetente)
 * **Tipos de Turnos (Kinds):** $KINDS
 * **Status de Tarefas (Statuses):** $STATUSES
-* **Escopos de Trabalho (Scopes):** $SCOPES
+* **Escopos de Trabalho (Scopes):** os senders + `cross`
+
+## Onboardear um agente ad-hoc
+
+O roster é o conteúdo de `docs/prompts/`. Para subir um agente novo no meio da
+sessão, crie o prompt dele — e só:
+
+```bash
+cp docs/prompts/dev.md docs/prompts/dba.md   # e edite
+./comms.py agents                            # confere o roster
+./comms.py post --de dba --para arch --tipo pergunta --titulo "..." --corpo "..."
+```
+
+Não há tuplas a editar nem banco a recriar: `sender`/`recipient`/`owner` não têm
+CHECK no schema, de propósito. Bancos criados antes da v4 congelam o roster no
+DDL — `./comms.py migrate` libera preservando turnos e itens.
 
 ## Responsabilidades
+
+Papéis padrão. Agentes ad-hoc adicionados depois não entram nesta tabela — o
+roster vivo é `./comms.py agents`.
 
 | Papel | Responsabilidade principal |
 |---|---|
@@ -183,7 +228,7 @@ Sempre que um agente ou humano iniciar uma sessão ou turno neste repositório, 
 | `dev` | implementação e documentação técnica |
 | `tester` | estratégia de testes, validação executável e aceite |
 | `reviewer` | revisão independente de correção, segurança e simplicidade |
-| `owner` | direção de produto e decisões humanas finais |
+| `human` | direção de produto e decisões humanas finais |
 
 ---
 
@@ -660,7 +705,7 @@ def cmd_finish(db, a):
         "INSERT INTO turns (sender, recipient, kind, title, body, refs) VALUES ('dev', 'reviewer', 'gate', ?, ?, ?)",
         (
             f"PR pronto #{issue_num}",
-            f"PR={pr_url}; entrega concluída e aguardando G4/G5 (review + merge do owner).",
+            f"PR={pr_url}; entrega concluída e aguardando G4/G5 (review + merge do human).",
             f"issue:{issue_num} pr:{pr_url}",
         ),
     )
@@ -747,6 +792,94 @@ def cmd_board_set(db, a):
     print(f"✓ Issue #{a.issue}: {old} → {a.status}")
 
 
+_FROZEN_TABLES = ("turns", "work_items")
+_INDEXES = (
+    "idx_turns_recipient",
+    "idx_turns_sender",
+    "idx_turns_resolved",
+    "idx_work_items_owner",
+    "idx_work_items_status",
+)
+
+
+def _frozen_roster_tables(db):
+    """Tabelas cujo DDL ainda congela o roster num CHECK (bancos <= v3)."""
+    rows = db.execute(
+        "SELECT name, sql FROM sqlite_master WHERE type='table' AND name IN (?,?)",
+        _FROZEN_TABLES,
+    ).fetchall()
+    return [
+        r["name"]
+        for r in rows
+        if r["sql"] and ("CHECK (sender IN" in r["sql"] or "CHECK (owner IN" in r["sql"])
+    ]
+
+
+def cmd_agents(db, _a):
+    frozen = _frozen_roster_tables(db)
+    print(f"== Roster ({PROMPTS_DIR}) ==")
+    counts = {
+        r["sender"]: r["n"]
+        for r in db.execute("SELECT sender, COUNT(*) n FROM turns GROUP BY sender")
+    }
+    for name in SENDERS:
+        origem = "humano" if name == HUMAN else f"docs/prompts/{name}.md"
+        print(f"  {name:12} {counts.get(name, 0):>4} turnos   {origem}")
+    print(f"\nBroadcast: {BROADCAST} (só destinatário)")
+    print("Onboardear agente novo: crie docs/prompts/<nome>.md — nada mais.")
+    # Remetentes já no histórico que sumiram do roster (prompt deletado/renomeado).
+    orfaos = sorted(set(counts) - set(SENDERS))
+    if orfaos:
+        print(f"\nSem prompt, mas presentes no histórico: {', '.join(orfaos)}")
+    if frozen:
+        print(
+            f"\nAVISO: {', '.join(frozen)} ainda congelam o roster num CHECK do schema "
+            "(banco criado em versão <= 3). Agentes novos serão rejeitados até você "
+            "rodar ./comms.py migrate (preserva os dados)."
+        )
+
+
+def cmd_migrate(db, _a):
+    """Remove os CHECKs de roster de turns/work_items preservando as linhas.
+
+    SQLite não altera CHECK: o caminho é recriar a tabela. Em vez de duplicar o DDL
+    aqui, renomeia as antigas, deixa o SCHEMA criar as novas e copia as linhas.
+    """
+    frozen = _frozen_roster_tables(db)
+    if not frozen:
+        print("Nada a migrar: o schema já aceita roster dinâmico.")
+        return
+    cols = {
+        "turns": "id, sender, recipient, kind, title, body, refs, created_at, resolved_at",
+        "work_items": "id, title, owner, scope, status, blocker, refs, updated_at",
+    }
+    db.commit()  # fecha qualquer transação implícita aberta por um DML anterior
+    try:
+        db.execute("BEGIN")
+        # Índices primeiro: um índice sobrevive ao RENAME grudado na tabela velha, e
+        # aí o CREATE INDEX IF NOT EXISTS do SCHEMA vira no-op na tabela nova.
+        for idx in _INDEXES:
+            db.execute(f"DROP INDEX IF EXISTS {idx}")
+        for t in _FROZEN_TABLES:
+            db.execute(f"ALTER TABLE {t} RENAME TO {t}_old")
+        # Statement a statement, não executescript: ele daria COMMIT implícito e
+        # jogaria fora a transação que protege a cópia das linhas.
+        for stmt in filter(None, (s.strip() for s in SCHEMA.split(";"))):
+            db.execute(stmt)
+        for t in _FROZEN_TABLES:
+            n = db.execute(
+                f"INSERT INTO {t} ({cols[t]}) SELECT {cols[t]} FROM {t}_old"
+            ).rowcount
+            print(f"  {t}: {n} linhas preservadas")
+        for t in _FROZEN_TABLES:
+            db.execute(f"DROP TABLE {t}_old")
+        db.execute("COMMIT")
+    except Exception:
+        db.execute("ROLLBACK")
+        raise
+    print("✓ Roster liberado. Agentes novos entram sem recriar o banco.")
+
+
 def cmd_bootstrap(a):
     db_path = DB_PATH
     if a.force and os.path.exists(db_path):
@@ -769,10 +902,8 @@ def cmd_bootstrap(a):
         "docs/core/AGENT_COMMS.md",
         Template(AGENT_COMMS_TEMPLATE).substitute(
             SENDERS=", ".join(SENDERS),
-            RECIPIENTS=", ".join(RECIPIENTS),
             KINDS=", ".join(KINDS),
             STATUSES=", ".join(STATUSES),
-            SCOPES=", ".join(WORK_ITEM_SCOPES),
             VERSION=__version__,
         ),
         a.force,
@@ -866,39 +997,106 @@ def check():
         )
         db.commit()
 
-        try:
-            db.execute(
-                "INSERT INTO turns (sender, recipient, kind, title, body) VALUES ('invalid_sender', 'todos', 'mensagem', 't', 'b')"
-            )
-            raise AssertionError("CHECK de sender inválido não disparou")
-        except sqlite3.IntegrityError:
-            pass
+        # Agente ad-hoc entra sem tocar no schema: é o ponto do roster dinâmico.
+        db.execute(
+            "INSERT INTO turns (sender, recipient, kind, title, body) VALUES ('dba', 'arch', 'pergunta', 'indice em turns?', 'b')"
+        )
+        db.execute(
+            "INSERT INTO work_items (title, owner, scope, status) VALUES ('tuning', 'dba', 'dba', 'aberto')"
+        )
+        db.commit()
+        assert (
+            db.execute("SELECT sender FROM turns WHERE title LIKE 'indice%'").fetchone()[
+                0
+            ]
+            == "dba"
+        )
 
-        try:
-            db.execute(
-                "INSERT INTO turns (sender, recipient, kind, title, body) VALUES ('arch', 'invalid_recipient', 'mensagem', 't', 'b')"
-            )
-            raise AssertionError("CHECK de recipient inválido não disparou")
-        except sqlite3.IntegrityError:
-            pass
-
-        try:
-            db.execute(
-                "INSERT INTO work_items (title, owner, scope, status) VALUES ('y', 'dev', 'dev', 'status_invalido')"
-            )
-            raise AssertionError("CHECK de status inválido não disparou")
-        except sqlite3.IntegrityError:
-            pass
-
-        try:
-            db.execute(
-                "INSERT INTO work_items (title, owner, scope, status) VALUES ('z', 'dev', 'escopo_invalido', 'aberto')"
-            )
-            raise AssertionError("CHECK de escopo inválido não disparou")
-        except sqlite3.IntegrityError:
-            pass
+        # kind/status continuam fechados — são política, não roster.
+        for sql, rotulo in (
+            (
+                "INSERT INTO turns (sender, recipient, kind, title, body) VALUES ('arch', 'todos', 'tipo_invalido', 't', 'b')",
+                "kind",
+            ),
+            (
+                "INSERT INTO work_items (title, owner, scope, status) VALUES ('y', 'dev', 'dev', 'status_invalido')",
+                "status",
+            ),
+        ):
+            try:
+                db.execute(sql)
+                raise AssertionError(f"CHECK de {rotulo} inválido não disparou")
+            except sqlite3.IntegrityError:
+                pass
 
         db.close()
+
+        # 1a. Roster sai de docs/prompts/, e a migração de banco antigo não perde linha
+        global PROMPTS_DIR
+        orig_prompts = PROMPTS_DIR
+        try:
+            PROMPTS_DIR = Path(tmp) / "docs" / "prompts"
+            assert agent_roster() == DEFAULT_ROSTER + (HUMAN,), "fallback sem diretório"
+            PROMPTS_DIR.mkdir(parents=True)
+            for nome in ("arch", "dev", "dba"):
+                (PROMPTS_DIR / f"{nome}.md").write_text("x", encoding="utf-8")
+            assert agent_roster() == ("arch", "dba", "dev", HUMAN), agent_roster()
+        finally:
+            PROMPTS_DIR = orig_prompts
+
+        legacy_path = os.path.join(tmp, "legacy.db")
+        legacy = sqlite3.connect(legacy_path)
+        legacy.executescript(
+            """
+            CREATE TABLE turns (
+              id INTEGER PRIMARY KEY,
+              sender TEXT NOT NULL CHECK (sender IN ('arch','dev')),
+              recipient TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
+              body TEXT NOT NULL, refs TEXT,
+              created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+              resolved_at TEXT);
+            CREATE TABLE work_items (
+              id INTEGER PRIMARY KEY, title TEXT NOT NULL,
+              owner TEXT NOT NULL CHECK (owner IN ('arch','dev')),
+              scope TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'aberto',
+              blocker TEXT, refs TEXT,
+              updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')));
+            CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL,
+              updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')));
+            CREATE INDEX idx_turns_sender ON turns(sender);
+            INSERT INTO turns (sender,recipient,kind,title,body)
+              VALUES ('arch','dev','mensagem','historico','preservar');
+            INSERT INTO work_items (title,owner,scope) VALUES ('item antigo','dev','dev');
+            """
+        )
+        legacy.commit()
+        legacy.close()
+
+        legacy = connect(legacy_path, read_only=True)
+        legacy.row_factory = sqlite3.Row
+        assert _frozen_roster_tables(legacy) == ["turns", "work_items"]
+        try:
+            legacy.execute(
+                "INSERT INTO turns (sender,recipient,kind,title,body) VALUES ('dba','arch','pergunta','t','b')"
+            )
+            raise AssertionError("banco legado deveria rejeitar agente novo")
+        except sqlite3.IntegrityError:
+            pass
+        cmd_migrate(legacy, None)
+        assert _frozen_roster_tables(legacy) == []
+        # O ponto da migração: o agente novo entra E o histórico continua lá.
+        legacy.execute(
+            "INSERT INTO turns (sender,recipient,kind,title,body) VALUES ('dba','arch','pergunta','t','b')"
+        )
+        assert (
+            legacy.execute(
+                "SELECT body FROM turns WHERE title='historico'"
+            ).fetchone()[0]
+            == "preservar"
+        )
+        assert legacy.execute("SELECT COUNT(*) FROM work_items").fetchone()[0] == 1
+        cmd_migrate(legacy, None)  # idempotente
+        legacy.close()
 
         # 1b. Config do board vem do kv, com default — nenhum ID de projeto no código
         db2 = connect(os.path.join(tmp, "kv.db"), read_only=False)
@@ -948,7 +1146,7 @@ def check():
 
             with open("docs/core/AGENT_COMMS.md", "r", encoding="utf-8") as f:
                 md_content = f.read()
-                assert "arch, pm, dev, tester, reviewer, owner" in md_content
+                assert "arch, pm, dev, tester, reviewer, human" in md_content
                 assert "todos" in md_content
 
             with open(".gitignore", "r", encoding="utf-8") as f:
@@ -1120,6 +1318,11 @@ def main():
 
     sub.add_parser("board-sync", help="sincronizar status do GitHub Projects Board com comms.db")
 
+    sub.add_parser("agents", help="listar o roster (um agente por docs/prompts/*.md)")
+    sub.add_parser(
+        "migrate", help="liberar o roster em banco antigo (preserva turnos e itens)"
+    )
+
     sp = sub.add_parser("board-item", help="imprimir item-id e status do card de uma issue")
     sp.add_argument("issue", type=int)
     sp = sub.add_parser("board-set", help="mover card da issue para outra coluna")
@@ -1135,7 +1338,7 @@ def main():
         return cmd_version(None, a)
 
     # board-sync escreve no kv; board-item só lê.
-    is_read_only = a.cmd in ("turns", "show", "items", "state", "board-item")
+    is_read_only = a.cmd in ("turns", "show", "items", "state", "board-item", "agents")
     db = connect(read_only=is_read_only)
     try:
         {
@@ -1153,6 +1356,8 @@ def main():
             "board-sync": cmd_board_sync,
             "board-item": cmd_board_item,
             "board-set": cmd_board_set,
+            "agents": cmd_agents,
+            "migrate": cmd_migrate,
         }[a.cmd](db, a)
     finally:
         if not is_read_only:

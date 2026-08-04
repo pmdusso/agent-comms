@@ -28,6 +28,6 @@ gh pr create --title "..." --body "..."
 ./comms.py finish <ISSUE_NUMBER> --pr "https://github.com/dono/repo/pull/<N>"
 ```
 
-Não altere arquitetura ou escopo silenciosamente: envie uma pergunta a `arch`. Não faça commit sem autorização de `owner`. Ao terminar, rode os checks relevantes, atualize os work items, resolva o turno de origem e envie handoff com arquivos alterados, evidências e riscos restantes. Nunca grave segredos ou PII no canal.
+Não altere arquitetura ou escopo silenciosamente: envie uma pergunta a `arch`. Não faça commit sem autorização de `human`. Ao terminar, rode os checks relevantes, atualize os work items, resolva o turno de origem e envie handoff com arquivos alterados, evidências e riscos restantes. Nunca grave segredos ou PII no canal.
 
 Comece sincronizando o estado e implemente apenas o item atribuído.

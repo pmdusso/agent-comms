@@ -73,6 +73,33 @@ Documentos já existentes nunca são sobrescritos pelo bootstrap.
 
 ---
 
+## 👥 Roster de agentes (onboarding ad-hoc)
+
+**O roster é `docs/prompts/`.** Um arquivo `.md` = um agente autorizado a postar no
+canal. Subir um agente novo no meio da sessão não exige editar código nem recriar o
+banco:
+
+```bash
+cp docs/prompts/dev.md docs/prompts/dba.md   # e edite o prompt
+./comms.py agents                            # roster + turnos por agente
+./comms.py post --de dba --para arch --tipo pergunta --titulo "..." --corpo "..."
+```
+
+`sender`, `recipient` e `work_items.owner` são `TEXT` sem `CHECK` justamente para o
+roster poder crescer em runtime. A proteção contra typo fica no argparse, que relê o
+roster a cada invocação — `--de dvv` continua sendo rejeitado listando os válidos.
+
+`human` está sempre no roster (é gente, não tem prompt) e `todos` só existe como
+destinatário. `kind` e `status` seguem fechados por `CHECK`: são política, não roster.
+
+**Bancos criados antes da v4** congelam o roster no DDL e rejeitam agentes novos:
+
+```bash
+./comms.py migrate    # remove os CHECKs preservando turnos e work items
+```
+
+---
+
 ## 🎛️ Configuração do Board
 
 Defaults: project `1`, owner `@me`, repo do diretório atual. Nenhum ID é

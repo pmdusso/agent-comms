@@ -13,7 +13,7 @@ description: >-
 
 Metade **downstream** do par `discovery`. Empacota **PIPELINE F0→F5**:
 worktree → execução do plano → review → PR. **Não faz merge (F6)** nem deploy
-sem GO explícito do `owner`.
+sem GO explícito do `human`.
 
 ## Opinionated defaults (nesta skill)
 
@@ -21,12 +21,12 @@ sem GO explícito do `owner`.
 |---|---|---|
 | Isolamento | **worktree** (`.worktrees/…`) | Protege `main`; casa com SDD |
 | Executor de plano | **subagent-driven-development** | Review por task; melhor que sessão monolítica |
-| Fallback | **executing-plans** | Só se subagents indisponíveis ou `owner` pedir inline |
+| Fallback | **executing-plans** | Só se subagents indisponíveis ou `human` pedir inline |
 | Pre-flight local | **Cubic** (`cubic review --base main`) | Consultivo; rápido; não bloqueia se indisponível |
 | Review de código | **CodeRabbit** (`coderabbit review --agent`) | Diff-focused; skill `code-review` |
 | Review extra | **ai-review** `-a balanced` no diff | Só se tocar auth/billing/compliance/purge/TTL |
-| Integração | **PR** (`gh pr create`) + Status **In review** | Merge = `owner` (G5) |
-| Assumptions (B) | Tratar como **requisitos** | Até `owner` invalidar; não reinventar discovery |
+| Integração | **PR** (`gh pr create`) + Status **In review** | Merge = `human` (G5) |
+| Assumptions (B) | Tratar como **requisitos** | Até `human` invalidar; não reinventar discovery |
 
 ## When to use
 
@@ -55,7 +55,7 @@ está no board — adicionar e consultar de novo.
 
 ## Hard constraints (AGENTS.md + PIPELINE)
 
-- Commits: **GO `owner`** (pedido nesta sessão ou GO escopado à rodada).
+- Commits: **GO `human`** (pedido nesta sessão ou GO escopado à rodada).
 - Gate de **reviewer** (humano/canal) para commits que toquem `scripts/`,
   `tests/`, copy visível, ou spec que crie/relaxe invariante — docs-only de
   finding acordado pode ir sem esse gate.
@@ -76,7 +76,7 @@ ruff check scripts tests
   toda transição de estado.
 - Não “corrigir” Assumptions inventando produto novo — se a hipótese quebrar
   testes/invariantes, for sensível, material ou irreversível, **STOP** e
-  perguntar ao `owner`.
+  perguntar ao `human`.
 
 ---
 
@@ -111,7 +111,7 @@ Skill `subagent-driven-development`:
 
 ### Fallback: executing-plans
 
-Mesma sessão, checkpoints; anunciar a skill. Preferir se `owner` pediu inline
+Mesma sessão, checkpoints; anunciar a skill. Preferir se `human` pediu inline
 ou subagents falharam.
 
 ### Por task (ambos os modos)
@@ -215,13 +215,13 @@ Esse comando executa em 1 único passo:
 2. Atualiza os itens no `comms.db` e posta o turno de `gate`.
 3. Comenta automaticamente na Issue do GitHub com o link da PR.
 
-**Done** no board só após merge (`owner`) — agente pode oferecer, não executar F6 sozinho.
+**Done** no board só após merge (`human`) — agente pode oferecer, não executar F6 sozinho.
 
 ---
 
 ## Step 5 — Parar e escalar
 
-STOP e perguntar ao `owner` se:
+STOP e perguntar ao `human` se:
 
 - Assumption invalida comportamento observado / teste
 - Plano tem gap que impede a task
@@ -248,7 +248,7 @@ STOP e perguntar ao `owner` se:
 |---|---|
 | Backlog → Ready | `discovery` |
 | Ready → In review | **`delivery`** (esta) |
-| Merge / deploy | humano (`owner`) + AGENTS.md |
+| Merge / deploy | humano (`human`) + AGENTS.md |
 
 Related: `docs/core/PIPELINE.md`, `brainstorming` (só se escopo mudar — senão
 voltar discovery), `writing-plans` (não reescrever plano sem pedido),
