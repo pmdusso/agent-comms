@@ -1,0 +1,23 @@
+LICENSE
+  s_4089c07997010d::t_947850577d18b6 1-21
+README.md
+  s_4089c07997010d::t_06702f2d2c7042 125-126
+.gitignore
+  s_4089c07997010d::t_174d19046b83af 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6c8f9a4a686d15fdb2fce5c8b29c139d2bd031fc",
+  "prompts": {},
+  "sessions": {
+    "s_4089c07997010d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ccfd2f1c-d90d-487a-bcba-d361acead059",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Pedro Martins Dusso <pedro@aegro.com.br>"
+    }
+  }
+}
