@@ -843,6 +843,14 @@ def cmd_board_set(db, a):
 FINDING_RE = re.compile(rf"^\[({'|'.join(SEVERITIES)})\]", re.IGNORECASE)
 
 
+def cmd_trunk(_db, _a):
+    """Nome do tronco, para os docs e skills não chutarem 'main'.
+
+    Uso nos comandos: git diff $(./comms.py trunk)...HEAD
+    """
+    print(default_branch(Path(DB_PATH).parent))
+
+
 def cmd_gate(db, a):
     """Critério de saída F4/G3/G4: nenhuma finding morre em silêncio.
 
@@ -1512,6 +1520,7 @@ def main():
     sub.add_parser("board-sync", help="sincronizar status do GitHub Projects Board com comms.db")
 
     sub.add_parser("agents", help="listar o roster (um agente por docs/prompts/*.md)")
+    sub.add_parser("trunk", help="imprimir o branch tronco do repo (nunca assume main)")
 
     sp = sub.add_parser("brief", help="prompt + estado + turnos de um agente, num blob só")
     sp.add_argument("agente", choices=SENDERS)
@@ -1542,6 +1551,7 @@ def main():
     # board-sync escreve no kv; board-item só lê.
     is_read_only = a.cmd in (
         "turns", "show", "items", "state", "board-item", "agents", "brief", "gate",
+        "trunk",
     )
     db = connect(read_only=is_read_only)
     try:
@@ -1564,6 +1574,7 @@ def main():
             "migrate": cmd_migrate,
             "brief": cmd_brief,
             "gate": cmd_gate,
+            "trunk": cmd_trunk,
         }[a.cmd](db, a)
     finally:
         if not is_read_only:

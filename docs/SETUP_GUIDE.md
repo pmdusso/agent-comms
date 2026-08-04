@@ -6,11 +6,16 @@ Este guia explica como integrar a infraestrutura de comunicação e orquestraç�
 
 ## 🛠️ Passo 1: Instalação no Repositório Target
 
-No terminal, execute o script de instalação apontando para o seu projeto:
+Clone o pacote uma vez e aponte o installer para o seu projeto:
 
 ```bash
-/Users/pmdusso/code/shared/agent-comms/install.sh ~/code/meu-novo-projeto
+git clone git@github.com:pmdusso/agent-comms.git ~/code/shared/agent-comms
+~/code/shared/agent-comms/install.sh ~/code/meu-novo-projeto
 ```
+
+Para atualizar o engine depois, re-rode o installer: ele sobrescreve o
+`comms.py` e **preserva** prompts e skills editados localmente. Use
+`--update` se quiser sobrescrever esses também.
 
 ---
 
@@ -22,12 +27,11 @@ Crie ou edite o arquivo `AGENTS.md` (ou `AGENTS.md` global) do seu novo projeto 
 ## Comunicação & Separação de Canais
 
 Ao iniciar uma sessão neste repositório:
-1. Execute `./comms.py state`.
-2. Leia os turnos abertos com `./comms.py turns`.
-3. Sincronize o Board do GitHub com o banco local via `./comms.py board-sync`.
-4. Use o papel atribuído: `arch`, `pm`, `dev`, `tester` ou `reviewer`.
-5. Registre decisões, bloqueios e handoffs no `comms.db`.
-6. Resolva os turnos atendidos com `./comms.py resolve <ID>`.
+1. Execute `./comms.py brief <seu-papel>` — traz prompt, estado e seus turnos.
+2. Sincronize o Board do GitHub com o banco local via `./comms.py board-sync`.
+3. Os papéis válidos são os de `./comms.py agents` (= um arquivo em `docs/prompts/`).
+4. Registre decisões, bloqueios e handoffs no `comms.db`.
+5. Resolva os turnos atendidos com `./comms.py resolve <ID>`.
 
 ### Regra de Ouro de Canais
 
@@ -42,23 +46,25 @@ Ao iniciar uma sessão neste repositório:
 
 ---
 
-## 🚀 Passo 3: Iniciar as Personas nas Sessões de Agentes
+## 🚀 Passo 3: Subir as Sessões de Agentes
 
-Cada agente (ou aba de terminal / subagente) deve assumir uma persona usando os one-liners dos prompts em `docs/prompts/`:
+Um terminal por agente. `brief` monta o contexto inteiro — prompt, estado do
+canal, itens do agente e o corpo dos turnos endereçados a ele:
 
-### **Prompt para Agente Implementador (`dev`)**
-```text
-Você é dev neste repositório. Entre na worktree criada pelo ./comms.py start, leia docs/prompts/dev.md, execute ./comms.py state e implemente a funcionalidade mantendo a suíte de testes verde.
+```bash
+./comms.py agents               # quem existe
+
+./comms.py brief dev            # copiar e colar na sessão
+./comms.py brief tester | claude -p
+./comms.py brief reviewer | gemini -p
 ```
 
-### **Prompt para Agente Validador (`tester`)**
-```text
-Você é tester neste repositório. Entre na worktree do card, leia docs/prompts/tester.md, execute a suíte de testes e confirme 100% de aprovação e cobertura.
-```
+Não há lista fixa de personas aqui: o roster é `docs/prompts/`. Para subir um
+agente que ainda não existe, crie o prompt dele e ele já pode postar:
 
-### **Prompt para Agente Auditor (`reviewer`)**
-```text
-Você é reviewer neste repositório. Entre na worktree do card, leia docs/prompts/reviewer.md, audite as modificações de código e busque por potenciais regressões ou sobre-engenharia.
+```bash
+cp docs/prompts/dev.md docs/prompts/dba.md   # e edite
+./comms.py brief dba
 ```
 
 ---
@@ -75,7 +81,10 @@ Você é reviewer neste repositório. Entre na worktree do card, leia docs/promp
 # 3. Desenvolver e testar na worktree criada em .worktrees/issue-42-...:
 make test          # ou a suíte do seu repo: ./test-all, uv run pytest, npm test
 
-# 4. Enviar PR e finalizar entrega:
+# 4. Toda finding do review tem que ter destino antes do PR (exit 1 se não):
+./comms.py gate --refs issue:42
+
+# 5. Enviar PR e finalizar entrega:
 git push -u origin HEAD
 gh pr create --title "feat: minha feature (#42)" --body "..."
 ./comms.py finish 42 --pr "https://github.com/usuario/repo/pull/123"

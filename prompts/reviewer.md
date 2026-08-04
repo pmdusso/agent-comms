@@ -18,7 +18,7 @@ Antes de agir:
 
 # 2. Rodar preflight e linters locais:
 make test          # ou a suíte do seu repo: ./test-all, uv run pytest, npm test
-coderabbit review --agent --base main
+coderabbit review --agent --base $(./comms.py trunk)
 
 # 3. Registrar parecer do gate no comms.db:
 ./comms.py post --de reviewer --para arch --tipo gate --titulo "Gate PR #N: APPROVE" --corpo "Diff auditado."

@@ -15,6 +15,7 @@ Ela permite rodar sessões multi-agente eficientes, paralelas e determinísticas
 - 🛠️ **Skills Autónomas de Pipeline:**
   - **`discovery`:** Automação do funil F1→F2 (Backlog ➔ Ready). Triagem, alinhamento, especificação, invariantes e publicação do card como `Ready`.
   - **`delivery`:** Automação do funil F3→F5 (Ready ➔ In review / PR). Worktree efêmera, ciclo TDD/testes, revisão de código, CodeRabbit, abertura de PR e movimentação do board.
+
 - 🎭 **Prompts de Personas Especializadas:**
   - `arch.md`: Arquiteto responsável pelas decisões de design, invariantes e diretivas.
   - `pm.md`: Product Manager responsável pelos refinamentos de backlog e PRD.
@@ -22,17 +23,22 @@ Ela permite rodar sessões multi-agente eficientes, paralelas e determinísticas
   - `tester.md`: Validador de testes e garantidor do piso de cobertura de testes.
   - `reviewer.md`: Auditor independente de qualidade e busca de regressões.
   - `gatekeeper.md`: Validador final de CI, PRs e autorização de merge.
-  - `discovery.md`: Condução do funil Backlog ➔ Ready.
-- 🚦 **Sistema de Gates Unificado:** Validação de transições de entrega (G1..G5) exigindo verificação de testes verdes e cobertura mínima antes de autorizar merge.
+
+  Esta lista é o padrão, não um limite: o roster é o diretório, e um `.md` novo
+  já é um agente. Veja [Roster de agentes](#-roster-de-agentes-onboarding-ad-hoc).
+
+- 🚦 **Gates com critério executável:** `./comms.py gate` sai com código 1 se
+  alguma finding de review ficou sem destino — aberta, ou marcada como débito
+  contra a política de severidade. Serve em CI e em pre-push.
 
 ---
 
 ## 📂 Estrutura do Repositório Exportado
 
 ```text
-/Users/pmdusso/code/shared/agent-comms/
+agent-comms/
 ├── comms.py                # Engine CLI principal de orquestração e banco SQLite
-├── install.sh              # Script de installation de 1 linha para novos repositórios
+├── install.sh              # Instalação/atualização de 1 linha em novos repositórios
 ├── README.md               # Documentação principal
 ├── skills/                 # Skills autónomas registradas para agentes AI
 │   ├── discovery/          # Skill de Discovery (Backlog -> Ready)
@@ -60,7 +66,8 @@ funis. São workflows executados por `arch`/`pm`/`dev`, não remetentes do canal
 Para equipar qualquer repositório existente ou novo com a infraestrutura de comunicação e skills:
 
 ```bash
-/Users/pmdusso/code/shared/agent-comms/install.sh /caminho/do/seu-projeto
+git clone git@github.com:pmdusso/agent-comms.git ~/code/shared/agent-comms
+~/code/shared/agent-comms/install.sh /caminho/do/seu-projeto
 ```
 
 O instalador vai:
@@ -118,29 +125,45 @@ via `gh project view` / `gh project field-list`. Só configure o que fugir do de
 O board precisa de um campo `Status`; colunas inexistentes retornam erro
 listando as disponíveis.
 
+O branch tronco também não é assumido — sai de `origin/HEAD`, e `./comms.py trunk`
+imprime o nome. Prompts e skills usam `$(./comms.py trunk)` em vez de escrever
+`main`, para funcionarem em repo cujo tronco é `dev`, `master` ou outro:
+
+```bash
+git diff $(./comms.py trunk)...HEAD
+./comms.py start 42 --base outro-branch   # override pontual
+```
+
 ---
 
 ## 💻 Guia Rápido de Comandos CLI (`comms.py`)
 
 ### 1. Iniciar Trabalho em um Card
+
 Conecta o card do GitHub Projects, move para `In progress`, cria um Git Worktree efêmero e registra o handoff no `comms.db`:
+
 ```bash
 ./comms.py start <ISSUE_NUMBER>
 ```
 
 ### 2. Concluir Trabalho e Abrir PR
+
 Move o card no GitHub Projects para `In review`, comenta na Issue, abre a PR e grava o gate de aprovação no `comms.db`:
+
 ```bash
 ./comms.py finish <ISSUE_NUMBER> --pr "https://github.com/usuario/repo/pull/<PR_NUMBER>"
 ```
 
 ### 3. Sincronizar Board ↔ Banco Local
+
 Sincroniza os status das issues do GitHub com o `comms.db`:
+
 ```bash
 ./comms.py board-sync
 ```
 
 ### 4. Consultar o Estado Atual
+
 Exibe resumos, itens pendentes e turnos abertos:
 
 ```bash
@@ -175,4 +198,5 @@ julgamento, e transformá-los em `exit 0` seria fingir rigor.
 ---
 
 ## ⚖️ Licença
+
 MIT — veja [LICENSE](LICENSE).

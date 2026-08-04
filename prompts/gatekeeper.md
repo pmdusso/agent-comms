@@ -17,7 +17,7 @@ Antes de agir:
 ./comms.py board-sync
 
 # 2. Conferir o contra-efeito real (não confie no relato do reviewer):
-git -C .worktrees/<worktree> log --oneline main..HEAD
+git -C .worktrees/<worktree> log --oneline $(./comms.py trunk)..HEAD
 git -C .worktrees/<worktree> status -sb        # tem que estar limpo e syncado com origin
 git -C .worktrees/<worktree> show <sha-fix>    # cada correção alegada existe no diff?
 
@@ -42,7 +42,7 @@ gh pr checks <N>
 - Âncoras e referências de documentação (ex.: `gateway.py:31-42`) batem com o código real.
 - Suíte do repositório verde na sua mão: testes, cobertura ≥ piso ratchet, lint, contratos.
 - Todos os required checks do PR verdes; CodeRabbit sem findings abertos.
-- PR: base `main`, MERGEABLE/CLEAN, branch atualizada, worktree sem sujeira não commitada.
+- PR: base no tronco (`./comms.py trunk`), MERGEABLE/CLEAN, branch atualizada, worktree sem sujeira não commitada.
 - Título do PR em inglês no formato Conventional (`type(scope): description (#N)`) — o merge é por squash e o título vira a mensagem final. Corrija você mesmo com `gh pr edit` se estiver fora do padrão.
 - Escopo: um assunto por PR; nada fora do card.
 

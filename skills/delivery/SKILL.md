@@ -19,10 +19,10 @@ sem GO explícito do `human`.
 
 | Escolha | Default | Por quê |
 |---|---|---|
-| Isolamento | **worktree** (`.worktrees/…`) | Protege `main`; casa com SDD |
+| Isolamento | **worktree** (`.worktrees/…`) | Protege o tronco; casa com SDD |
 | Executor de plano | **subagent-driven-development** | Review por task; melhor que sessão monolítica |
 | Fallback | **executing-plans** | Só se subagents indisponíveis ou `human` pedir inline |
-| Pre-flight local | **Cubic** (`cubic review --base main`) | Consultivo; rápido; não bloqueia se indisponível |
+| Pre-flight local | **Cubic** (`cubic review --base $(./comms.py trunk)`) | Consultivo; rápido; não bloqueia se indisponível |
 | Review de código | **CodeRabbit** (`coderabbit review --agent`) | Diff-focused; skill `code-review` |
 | Review extra | **ai-review** `-a balanced` no diff | Só se tocar auth/billing/compliance/purge/TTL |
 | Integração | **PR** (`gh pr create`) + Status **In review** | Merge = `human` (G5) |
@@ -68,7 +68,7 @@ ruff check scripts tests
 
 - Comandos de cloud (`gcloud`, `aws`, `firebase`) sempre com conta e projeto
   explícitos — nunca no default ambiente. Deploy só com GO.
-- Nunca `git clean -x`. Sem force-push em `main`.
+- Nunca `git clean -x`. Sem force-push no tronco.
 - Antes de Cubic, CodeRabbit ou ai-review, limitar o alvo, inspecionar
   segredos/PII e obter confirmação explícita para alvo + provedor. Se não puder
   sanear, parar; conteúdo não redigido exige autorização explícita.
@@ -90,7 +90,7 @@ Rode o comando de orquestração unificada v3:
 
 Esse comando executa atomicamente em 1 único passo:
 1. Altera o status no GitHub Projects Board para **In progress**.
-2. Cria o git worktree em `.worktrees/issue-<N>-<slug>` a partir da `main` atualizada.
+2. Cria o git worktree em `.worktrees/issue-<N>-<slug>` a partir do tronco atualizado (`./comms.py trunk`).
 3. Cria o item de trabalho e grava o turno de `handoff` no `comms.db`.
 
 ---
@@ -129,7 +129,7 @@ Após o plano completo (ou antes do PR):
 
 ### 3a) Preflight de segurança (obrigatório)
 
-Inspecionar somente `git diff main...HEAD` e os arquivos alvo. Não incluir
+Inspecionar somente `git diff $(./comms.py trunk)...HEAD` e os arquivos alvo. Não incluir
 untracked alheio. Verificar segredos, credenciais e PII antes de qualquer envio;
 se houver dúvida ou a redação mudar o sentido do review, parar e pedir decisão.
 
@@ -138,7 +138,7 @@ se houver dúvida ou a redação mudar o sentido do review, parar e pedir decis�
 Rodar uma vez antes do CodeRabbit, se instalado e autenticado:
 
 ```bash
-cubic review --base main --json
+cubic review --base $(./comms.py trunk) --json
 ```
 
 Validar cada finding antes de corrigir e repetir no máximo uma vez. Falha de
@@ -154,7 +154,7 @@ Skill `code-review`:
 coderabbit --version 2>/dev/null || echo "NOT_INSTALLED"
 coderabbit auth status 2>&1
 # na worktree / repo:
-coderabbit review --agent --base main
+coderabbit review --agent --base $(./comms.py trunk)
 # ou: coderabbit review --agent -t uncommitted
 ```
 
@@ -166,7 +166,7 @@ Rodar se o diff tocar área sensível: auth, billing, purge/TTL, KMS, webhooks,
 mensagens ao usuário final, ou invariantes de arquitetura documentados no repo:
 
 ```bash
-git diff main...HEAD | ai-review --redact -a balanced -t pr-review \
+git diff $(./comms.py trunk)...HEAD | ai-review --redact -a balanced -t pr-review \
   -s "Review delivery #N; foque regressões e invariantes de arquitetura."
 ```
 
