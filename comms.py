@@ -1309,6 +1309,40 @@ def check():
         for hardcoded in ("gear" + "pal", "PVT" + "_kwHO", "PVTSS" + "F_"):
             assert hardcoded not in src, f"ID hardcoded voltou ao comms.py: {hardcoded}"
 
+        # Os docs também precisam ser portáteis. Este arquivo tem check(); prompts e
+        # skills não têm nada — e é neles que um literal de um projeto específico
+        # sobrevive em silêncio, porque Markdown nunca falha alto.
+        pack = Path(__file__).resolve().parent
+        alvos = sorted(pack.glob("prompts/*.md")) + sorted(
+            pack.glob("skills/*/SKILL.md")
+        )
+        if alvos:
+            proibidos = (
+                (r"/Users/", "caminho absoluto de uma máquina"),
+                (r"\b(main|master)\b", "nome de branch fixo — use $(./comms.py trunk)"),
+                (r"-R\s+[\w.-]+/[\w.-]+", "repo fixo no gh — deixe o gh resolver"),
+                (r"PVT[A-Z]*_", "node id de GitHub Project"),
+                (r"--(project|field)-id\s+\S", "id de board fixo — use board-item/board-set"),
+            )
+            vazamentos = [
+                f"{f.relative_to(pack)}:{i}: {porque} → {linha.strip()[:70]}"
+                for f in alvos
+                for i, linha in enumerate(
+                    f.read_text(encoding="utf-8").splitlines(), start=1
+                )
+                for padrao, porque in proibidos
+                if re.search(padrao, linha)
+            ]
+            assert not vazamentos, "literais não-portáveis nos docs:\n" + "\n".join(
+                vazamentos
+            )
+        else:
+            print(
+                f"AVISO check(): docs NAO varridos — {pack}/prompts e {pack}/skills "
+                "nao existem (rodando de uma instalacao, nao do pacote fonte)",
+                file=sys.stderr,
+            )
+
         # 2. Testar regex PII guard
         assert PII_RE.search("+5551999998888")
         assert PII_RE.search("32165498700")  # CPF sequence
