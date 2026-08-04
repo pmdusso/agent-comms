@@ -37,21 +37,21 @@ Ela permite rodar sessões multi-agente eficientes, paralelas e determinísticas
 ├── skills/                 # Skills autónomas registradas para agentes AI
 │   ├── discovery/          # Skill de Discovery (Backlog -> Ready)
 │   └── delivery/           # Skill de Delivery (Ready -> In review / PR)
-├── prompts/                # Prompts de personas prontas para colar nas sessões
+├── prompts/                # UM ARQUIVO = UM AGENTE. Este diretório É o roster.
 │   ├── arch.md
 │   ├── dev.md
-│   ├── discovery.md
 │   ├── gatekeeper.md
 │   ├── pm.md
 │   ├── reviewer.md
 │   └── tester.md
-├── docs/                   # Especificações de protocolo e guiagem
-│   └── SETUP_GUIDE.md      # Guia de instalação e configuração rápida
+└── docs/                   # Especificações de protocolo e guiagem
+    └── SETUP_GUIDE.md      # Guia de instalação e configuração rápida
                             # AGENT_COMMS.md e PIPELINE.md são GERADOS pelo
                             # bootstrap, a partir dos templates no comms.py
-└── scripts/                # Scripts utilitários de suporte
-    └── start.sh            # Script de inicialização da sessão
 ```
+
+Discovery e delivery vivem só em `skills/` — não há prompt duplicando esses
+funis. São workflows executados por `arch`/`pm`/`dev`, não remetentes do canal.
 
 ---
 
@@ -142,10 +142,35 @@ Sincroniza os status das issues do GitHub com o `comms.db`:
 
 ### 4. Consultar o Estado Atual
 Exibe resumos, itens pendentes e turnos abertos:
+
 ```bash
 ./comms.py state
-./comms.py turns
+./comms.py turns --para dev     # só o que é do dev (inclui broadcast)
 ```
+
+### 5. Subir um agente
+
+`brief` concatena o prompt do agente com o estado do canal e os turnos abertos
+para ele — um blob só, sem precisar de um `show` por turno:
+
+```bash
+./comms.py brief dev                      # para colar
+./comms.py brief dev | claude -p          # ou pipar direto
+```
+
+### 6. Verificar o gate antes do PR
+
+Verifica o critério F4/G3/G4 do PIPELINE — toda finding tem destino. Sai com
+código 1 se alguma estiver `aberto`, se um `[grave]` virou débito, ou se um
+`[medio]` virou débito sem justificativa. Serve em CI e em pre-push:
+
+```bash
+./comms.py gate                  # tudo
+./comms.py gate --refs issue:42  # só o escopo do card
+```
+
+G1/G2 (painel rodou) e G5 (merge humano) não são checáveis daqui — são
+julgamento, e transformá-los em `exit 0` seria fingir rigor.
 
 ---
 

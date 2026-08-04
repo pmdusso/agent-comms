@@ -9,6 +9,9 @@ Uso rápido:
   ./comms.py items [--all]        ./comms.py item-add --titulo "..." --dono tester
   ./comms.py item-set N --status feito [--bloqueio "..."]
   ./comms.py set bola_com "tester"
+  ./comms.py agents                                 # roster (= docs/prompts/*.md)
+  ./comms.py brief dev                              # prompt + estado, num blob só
+  ./comms.py gate [--refs issue:42]                 # F4/G3/G4; exit 1 se reprovar
   ./comms.py bootstrap                              # inicializar repositório (db + manual)
   ./comms.py check                                  # self-test em banco temporário
 
@@ -132,6 +135,40 @@ def agent_roster():
 SENDERS = agent_roster()
 RECIPIENTS = SENDERS + (BROADCAST,)
 WORK_ITEM_SCOPES = SENDERS + ("cross",)
+
+
+def default_branch(repo_root):
+    """Tronco do repositório. Nunca assumir 'main': o default aqui é `dev`.
+
+    origin/HEAD é a resposta certa quando existe. Sem remote (repo local, clone
+    raso, CI sem fetch de HEAD), cai para o primeiro tronco convencional que
+    existir de fato, e só então para o branch atual.
+    """
+    res = subprocess.run(
+        ["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode == 0 and res.stdout.strip():
+        return res.stdout.strip().split("/", 1)[-1]  # "origin/dev" -> "dev"
+    for cand in ("main", "master", "dev"):
+        if (
+            subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", cand],
+                cwd=repo_root,
+                capture_output=True,
+            ).returncode
+            == 0
+        ):
+            return cand
+    res = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    return res.stdout.strip() or "main"
 
 
 def _sql_in(values):
@@ -373,8 +410,17 @@ def cmd_post(db, a):
 
 
 def cmd_turns(db, a):
-    where = "" if a.all else "WHERE resolved_at IS NULL"
-    rows = db.execute(f"SELECT * FROM turns {where} ORDER BY id DESC").fetchall()
+    clauses, params = [], []
+    if not a.all:
+        clauses.append("resolved_at IS NULL")
+    # "todos" é broadcast: quem filtra por um papel também recebe o que foi para todos.
+    if getattr(a, "para", None):
+        clauses.append("recipient IN (?, ?)")
+        params += [a.para, BROADCAST]
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db.execute(
+        f"SELECT * FROM turns {where} ORDER BY id DESC", params
+    ).fetchall()
     for r in rows:
         mark = "aberto" if r["resolved_at"] is None else "resolvido"
         print(
@@ -637,15 +683,17 @@ def cmd_start(db, a):
         wt_dir = repo_root / ".worktrees" / slug
         if not wt_dir.exists():
             branch_name = f"feat/{issue_num}-{raw_slug[:25]}"
+            base = a.base or default_branch(repo_root)
             res = subprocess.run(
-                ["git", "worktree", "add", "-b", branch_name, str(wt_dir), "main"],
+                ["git", "worktree", "add", "-b", branch_name, str(wt_dir), base],
                 cwd=repo_root,
                 capture_output=True,
                 text=True,
             )
             if res.returncode == 0:
                 print(
-                    f"✓ Git Worktree criado em: .worktrees/{slug} (branch: {branch_name})"
+                    f"✓ Git Worktree criado em: .worktrees/{slug} "
+                    f"(branch: {branch_name}, base: {base})"
                 )
             else:
                 print(f"Aviso ao criar worktree: {res.stderr.strip()}")
@@ -790,6 +838,79 @@ def cmd_board_set(db, a):
         sys.exit(f"ERRO: issue #{a.issue} não está no board.")
     gh_set_project_status(db, item_id, a.status)
     print(f"✓ Issue #{a.issue}: {old} → {a.status}")
+
+
+FINDING_RE = re.compile(rf"^\[({'|'.join(SEVERITIES)})\]", re.IGNORECASE)
+
+
+def cmd_gate(db, a):
+    """Critério de saída F4/G3/G4: nenhuma finding morre em silêncio.
+
+    Só olha work_items cujo título tem prefixo de severidade — o resto é trabalho
+    normal, não finding de gate. G1/G2 (painel rodou) e G5 (merge humano) não são
+    verificáveis daqui: são julgamento, e fingir que são checagem seria pior.
+    """
+    q, params = "SELECT * FROM work_items", []
+    if a.refs:
+        q += " WHERE refs LIKE ?"
+        params.append(f"%{a.refs}%")
+    falhas, checadas = [], 0
+    for r in db.execute(q + " ORDER BY id", params):
+        m = FINDING_RE.match(r["title"])
+        if not m:
+            continue
+        checadas += 1
+        sev, status = m.group(1).lower(), r["status"]
+        if status in ("aberto", "bloqueado"):
+            falhas.append(f"#{r['id']} [{sev}] sem destino (status={status}): {r['title']}")
+        elif status == "debito" and sev == "grave":
+            falhas.append(f"#{r['id']} grave como débito — a política proíbe: {r['title']}")
+        elif status == "debito" and sev == "medio" and not (r["blocker"] or "").strip():
+            falhas.append(
+                f"#{r['id']} médio em débito sem justificativa "
+                f"(item-set {r['id']} --status debito --bloqueio \"motivo\"): {r['title']}"
+            )
+    escopo = f" em {a.refs}" if a.refs else ""
+    if falhas:
+        print(f"GATE REPROVADO — {len(falhas)} de {checadas} findings{escopo}:")
+        for f in falhas:
+            print(f"  {f}")
+        sys.exit(1)
+    # Zero findings passa, mas dizer quantas foram checadas evita ler "0 de 0" como aprovação real.
+    print(f"GATE OK — {checadas} findings{escopo}, todas com destino.")
+
+
+def cmd_brief(db, a):
+    """Todo o contexto de um agente num blob só, para colar ou pipar no CLI dele."""
+    prompt = PROMPTS_DIR / f"{a.agente}.md"
+    if prompt.is_file():
+        print(prompt.read_text(encoding="utf-8").rstrip())
+    elif a.agente != HUMAN:
+        print(f"(sem prompt em docs/prompts/{a.agente}.md — agente só no histórico)")
+    print(f"\n{'=' * 70}\n== Estado do canal para `{a.agente}` ==\n")
+    for r in db.execute("SELECT key, value FROM kv ORDER BY key"):
+        print(f"{r['key']}: {r['value']}")
+    print(f"\n-- Seus itens abertos --")
+    rows = db.execute(
+        "SELECT * FROM work_items WHERE owner=? AND status != 'feito' ORDER BY id",
+        (a.agente,),
+    ).fetchall()
+    for r in rows:
+        extra = f" — bloqueio: {r['blocker']}" if r["blocker"] else ""
+        print(f"#{r['id']} [{r['status']}] {r['title']}{extra}")
+    print("(nenhum)" if not rows else "")
+    print("-- Turnos abertos para você --")
+    rows = db.execute(
+        "SELECT * FROM turns WHERE resolved_at IS NULL AND recipient IN (?, ?) ORDER BY id",
+        (a.agente, BROADCAST),
+    ).fetchall()
+    for r in rows:
+        refs = f"\nrefs: {r['refs']}" if r["refs"] else ""
+        # Corpo inteiro: o ponto do brief é não precisar de um `show` por turno.
+        print(f"\n#{r['id']} {r['sender']} → {r['recipient']} · {r['kind']}{refs}")
+        print(f"{r['title']}\n\n{r['body']}")
+    print("(nenhum)" if not rows else "")
+    print(f"\nResolva o que atender: ./comms.py resolve <ID>")
 
 
 _FROZEN_TABLES = ("turns", "work_items")
@@ -1098,6 +1219,74 @@ def check():
         cmd_migrate(legacy, None)  # idempotente
         legacy.close()
 
+        # 1c. Gate F4/G3/G4: cada porta de saída de uma finding
+        g = connect(os.path.join(tmp, "gate.db"), read_only=False)
+        args_gate = argparse.Namespace(refs=None)
+
+        def gate_falha():
+            try:
+                cmd_gate(g, args_gate)
+                return False
+            except SystemExit:
+                return True
+
+        # Work item comum não é finding: não tem prefixo de severidade, não trava o gate.
+        g.execute(
+            "INSERT INTO work_items (title, owner, scope, status) VALUES ('#42: feature', 'dev', 'cross', 'aberto')"
+        )
+        assert not gate_falha(), "item comum aberto não deveria reprovar o gate"
+
+        g.execute(
+            "INSERT INTO work_items (title, owner, scope, status) VALUES ('[pequeno] typo', 'dev', 'dev', 'aberto')"
+        )
+        assert gate_falha(), "finding aberta tem que reprovar"
+        g.execute("UPDATE work_items SET status='debito' WHERE title LIKE '[pequeno]%'")
+        assert not gate_falha(), "pequeno pode virar débito sem justificativa"
+
+        g.execute(
+            "INSERT INTO work_items (title, owner, scope, status) VALUES ('[medio] n+1', 'dev', 'dev', 'debito')"
+        )
+        assert gate_falha(), "medio em débito sem justificativa tem que reprovar"
+        g.execute("UPDATE work_items SET blocker='fora do hot path' WHERE title LIKE '[medio]%'")
+        assert not gate_falha(), "medio em débito com justificativa passa"
+
+        g.execute(
+            "INSERT INTO work_items (title, owner, scope, status) VALUES ('[grave] sqli', 'dev', 'dev', 'debito')"
+        )
+        assert gate_falha(), "grave nunca vira débito"
+        g.execute("UPDATE work_items SET status='feito' WHERE title LIKE '[grave]%'")
+        assert not gate_falha()
+
+        # Escopo por refs isola findings de outra issue.
+        g.execute(
+            "INSERT INTO work_items (title, owner, scope, status, refs) VALUES ('[grave] outra', 'dev', 'dev', 'aberto', 'issue:99')"
+        )
+        assert gate_falha(), "finding aberta em qualquer escopo reprova o gate global"
+        args_gate.refs = "issue:42"
+        assert not gate_falha(), "gate com --refs não deve ver finding de outra issue"
+        g.commit()
+        g.close()
+
+        # 1d. Tronco vem do git, nunca de um literal "main"
+        branch_repo = os.path.join(tmp, "branch_repo")
+        os.makedirs(branch_repo)
+        env = {**os.environ, "GIT_CONFIG_GLOBAL": os.path.join(tmp, "nonexistent")}
+        subprocess.run(
+            ["git", "init", "-q", "-b", "tronco-esquisito", "."],
+            cwd=branch_repo,
+            capture_output=True,
+            env=env,
+        )
+        subprocess.run(
+            ["git", "commit", "-q", "--allow-empty", "-m", "x", "--no-gpg-sign"],
+            cwd=branch_repo,
+            capture_output=True,
+            env=env,
+        )
+        assert default_branch(branch_repo) == "tronco-esquisito", default_branch(
+            branch_repo
+        )
+
         # 1b. Config do board vem do kv, com default — nenhum ID de projeto no código
         db2 = connect(os.path.join(tmp, "kv.db"), read_only=False)
         assert _kv_get(db2, "board.project", "1") == "1"
@@ -1263,6 +1452,9 @@ def main():
 
     sp = sub.add_parser("turns", help="listar turnos (default: abertos)")
     sp.add_argument("--all", action="store_true")
+    sp.add_argument(
+        "--para", choices=RECIPIENTS, help="só turnos para este papel (inclui broadcast)"
+    )
     sp = sub.add_parser("show", help="ver turno completo")
     sp.add_argument("id", type=int)
     sp = sub.add_parser("resolve", help="marcar turno resolvido")
@@ -1311,6 +1503,7 @@ def main():
     sp.add_argument("issue", type=int, help="número da issue (ex: 12)")
     sp.add_argument("--dono", choices=SENDERS, default="dev", help="papel responsável (default: dev)")
     sp.add_argument("--no-worktree", action="store_true", help="não criar git worktree automático")
+    sp.add_argument("--base", help="branch base da worktree (default: tronco do repo)")
 
     sp = sub.add_parser("finish", help="concluir trabalho em issue (In review + PR + comms)")
     sp.add_argument("issue", type=int, help="número da issue (ex: 12)")
@@ -1319,6 +1512,15 @@ def main():
     sub.add_parser("board-sync", help="sincronizar status do GitHub Projects Board com comms.db")
 
     sub.add_parser("agents", help="listar o roster (um agente por docs/prompts/*.md)")
+
+    sp = sub.add_parser("brief", help="prompt + estado + turnos de um agente, num blob só")
+    sp.add_argument("agente", choices=SENDERS)
+
+    sp = sub.add_parser(
+        "gate", help="verificar F4/G3/G4: toda finding tem destino (exit 1 se não)"
+    )
+    sp.add_argument("--refs", help="limitar a um escopo (ex: issue:42)")
+
     sub.add_parser(
         "migrate", help="liberar o roster em banco antigo (preserva turnos e itens)"
     )
@@ -1338,7 +1540,9 @@ def main():
         return cmd_version(None, a)
 
     # board-sync escreve no kv; board-item só lê.
-    is_read_only = a.cmd in ("turns", "show", "items", "state", "board-item", "agents")
+    is_read_only = a.cmd in (
+        "turns", "show", "items", "state", "board-item", "agents", "brief", "gate",
+    )
     db = connect(read_only=is_read_only)
     try:
         {
@@ -1358,6 +1562,8 @@ def main():
             "board-set": cmd_board_set,
             "agents": cmd_agents,
             "migrate": cmd_migrate,
+            "brief": cmd_brief,
+            "gate": cmd_gate,
         }[a.cmd](db, a)
     finally:
         if not is_read_only:
