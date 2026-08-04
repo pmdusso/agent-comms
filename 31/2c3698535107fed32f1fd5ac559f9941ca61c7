@@ -1,0 +1,19 @@
+comms.py
+  s_4089c07997010d::t_99b39cbdf567ae 1312-1345
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "312c3698535107fed32f1fd5ac559f9941ca61c7",
+  "prompts": {},
+  "sessions": {
+    "s_4089c07997010d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ccfd2f1c-d90d-487a-bcba-d361acead059",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Pedro Martins Dusso <pedro@aegro.com.br>"
+    }
+  }
+}
