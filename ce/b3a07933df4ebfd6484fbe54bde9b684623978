@@ -1,0 +1,35 @@
+install.sh
+  s_4089c07997010d::t_8ca7708c94e9d0 73-79
+  s_4089c07997010d::t_23ed6a9908776f 5-12,18-25,28-36,42-45,47-48,53
+README.md
+  s_4089c07997010d::t_a89ad32436ef26 40,47-48,53-54
+  s_4089c07997010d::t_bafc9d909a04a7 145,148-158,161-173
+comms.py
+  s_4089c07997010d::t_138fd475a1ae2c 1506
+  s_4089c07997010d::t_54a0b8f67da0f3 1222-1289
+  s_4089c07997010d::t_4a35f806e9a821 413-423
+  s_4089c07997010d::t_aa06bb66ea183b 12-14
+  s_4089c07997010d::t_aaa3c28aba1228 843-915
+  s_4089c07997010d::t_def251db67303b 1543-1545
+  s_4089c07997010d::t_00950c680fe63d 140-173
+  s_4089c07997010d::t_b572d2cf476141 686,688,695-696
+  s_4089c07997010d::t_080723b8a359cd 1455-1457
+  s_4089c07997010d::t_811df32cbbf182 1515-1523
+  s_4089c07997010d::t_53e5bdb9b5c074 1565-1566
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ceb3a07933df4ebfd6484fbe54bde9b684623978",
+  "prompts": {},
+  "sessions": {
+    "s_4089c07997010d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ccfd2f1c-d90d-487a-bcba-d361acead059",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Pedro Martins Dusso <pedro@aegro.com.br>"
+    }
+  }
+}
