@@ -1,0 +1,42 @@
+prompts/reviewer.md
+  s_4089c07997010d::t_1ba3f8d78caecd 21
+docs/SETUP_GUIDE.md
+  s_4089c07997010d::t_2160f26aef01bb 49,51-52,54-55,57-59,62-67
+  s_4089c07997010d::t_5fc6c56875f362 30-34
+  s_4089c07997010d::t_e8c05cb0969430 9,12-13,16-18
+  s_4089c07997010d::t_c54a879432852d 84-87
+prompts/gatekeeper.md
+  s_4089c07997010d::t_d067c37309fa6f 45
+  s_4089c07997010d::t_1ba3f8d78caecd 20
+README.md
+  s_4089c07997010d::t_6ce1dfea57de13 41
+  s_4089c07997010d::t_d497988f2cad4f 69-70
+  s_4089c07997010d::t_d0671a1963bd02 27-32
+  s_4089c07997010d::t_2206f5d95af1df 128-136
+  s_4089c07997010d::t_5ef409d6b2231e 18,26,142,144,150,152,158,160,166,201
+  s_4089c07997010d::t_a8357b06bd0929 39
+comms.py
+  s_4089c07997010d::t_716720730fa1a2 846-853
+  s_4089c07997010d::t_a092f4de9fcf72 1577
+  s_4089c07997010d::t_3ccf34f285accd 1523
+  s_4089c07997010d::t_ff720126e40520 1554
+skills/delivery/SKILL.md
+  s_4089c07997010d::t_d067c37309fa6f 22,71,93
+  s_4089c07997010d::t_1ba3f8d78caecd 25,132,141,157,169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d4e49cf9ee4a928d4cda56850f860771ec9dcb2e",
+  "prompts": {},
+  "sessions": {
+    "s_4089c07997010d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ccfd2f1c-d90d-487a-bcba-d361acead059",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Pedro Martins Dusso <pedro@aegro.com.br>"
+    }
+  }
+}
