@@ -1,0 +1,25 @@
+comms.py
+  s_f422911c9876dc::t_626b5e30c13bf5 29
+  s_f422911c9876dc::t_50d7b8f4b24b7f 1421-1440
+  s_f422911c9876dc::t_c5190268cb3f0f 403-420,424-432
+prompts/dev.md
+  s_f422911c9876dc::t_37090748e49b1a 46
+docs/2026-08-05-prompt-best-practices-findings.md
+  s_f422911c9876dc::t_e4ebb087494d41 66,68-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d6efe5fb041867780bc3316e6f733a3526143a20",
+  "prompts": {},
+  "sessions": {
+    "s_f422911c9876dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb232602-92c8-4f24-ba1c-a236ee85d0fb",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Pedro Martins Dusso <pedro@aegro.com.br>"
+    }
+  }
+}
