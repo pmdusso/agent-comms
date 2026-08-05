@@ -1,0 +1,31 @@
+prompts/gatekeeper.md
+  s_f422911c9876dc::t_cdc37a7cc6e6b3 5,12,14-16,52,54-55,57-64
+docs/2026-08-05-prompt-best-practices-findings.md
+  s_f422911c9876dc::t_cf1b7be04e29af 1-80
+prompts/arch.md
+  s_f422911c9876dc::t_a0d57b8e5cc7b2 5,12,14-16,32-43
+prompts/pm.md
+  s_f422911c9876dc::t_44feaa1ebb4a99 5,12,14-16,29-39
+prompts/reviewer.md
+  s_f422911c9876dc::t_8a16172dacbf02 5,12,14-16,30-40
+prompts/tester.md
+  s_f422911c9876dc::t_e68d3f59502922 5,12,14-16,30-41
+prompts/dev.md
+  s_f422911c9876dc::t_8c8a2a3ca59540 5,12,14-16,34-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a37243c754462ed374656c58213e8686aa72e6fd",
+  "prompts": {},
+  "sessions": {
+    "s_f422911c9876dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb232602-92c8-4f24-ba1c-a236ee85d0fb",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Pedro Martins Dusso <pedro@aegro.com.br>"
+    }
+  }
+}
