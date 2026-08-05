@@ -63,11 +63,11 @@ O desenho atual bate com as práticas documentadas em todos os pontos estruturai
 - **Headers de seção explícitos** nos prompts (`## Papel`, `## Antes de agir`, `## Fluxo`, `## Limites`, `## Término`) — custo zero, melhora parsing (Anthropic, Google, Cursor/OpenHands usam containers nomeados).
 - **Esqueleto compartilhado**: os 6 prompts repetem o mesmo bloco "Antes de agir" à mão. O padrão Codex (fragmentos compostos) resolveria drift, mas adiciona máquina — YAGNI enquanto o `check()` puder guardar a consistência.
 
-## Follow-ups fora dos prompts (backlog, não desta mudança)
+## Follow-ups fora dos prompts — IMPLEMENTADOS (2026-08-05)
 
-1. **Template de handoff imposto no `comms.py`** — rejeitar `--tipo handoff` sem campos obrigatórios (objetivo/critérios/fronteiras). Código > prompt para regra sem exceção (Anthropic: advisory vs deterministic).
-2. **Lint de contradições** no `check()`: varrer os 6 prompts + docs gerados por instruções conflitantes (GPT-5 guide: modelos atuais queimam esforço reconciliando conflitos).
-3. Campo "alternativas rejeitadas" no handoff de conclusão — é o que resumos ingênuos sempre dropam e o próximo papel mais precisa (Cognition/Anthropic).
+1. **Template de handoff imposto no `comms.py`** ✅ — `cmd_post` rejeita `--tipo handoff` cujo corpo não nomeie `Objetivo:`, `Critérios:` e `Fronteiras:` (acento-insensível; `--force` como escape consciente). Código > prompt para regra sem exceção (Anthropic: advisory vs deterministic). Handoffs gerados internamente por `start`/`finish` não passam pelo validador.
+2. **Lint de coerência no `check()`** ✅ — versão determinística do "lint de contradições": todo prompt tem o esqueleto completo (`## Antes de agir`/`## Fluxo`/`## Limites`/`## Término`), no máximo 5 `NUNCA` (orçamento de ênfase), e o `pm.md` cita os mesmos campos que o `cmd_post` exige (sincronia prompt↔código). Contradição *semântica* continua sendo julgamento — auditada à mão nesta rodada (a do `dev.md` commit vs. fluxo foi resolvida).
+3. **Campo "alternativas rejeitadas"** ✅ — no `## Término` do `dev.md`, o handoff de conclusão pede alternativas rejeitadas junto com evidência e riscos (é o que resumos ingênuos sempre dropam — Cognition/Anthropic). Fica como conteúdo pedido pelo prompt, não campo imposto no código: nem todo handoff rejeitou alternativas.
 
 ---
 

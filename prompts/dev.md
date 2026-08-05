@@ -43,7 +43,7 @@ gh pr create --title "..." --body "..."
 
 - Suíte já vermelha ao pegar o card → poste `bloqueio` a `arch` com a evidência; não conserte silenciosamente.
 - Após 3 tentativas falhas no mesmo obstáculo, poste `bloqueio` e pare — condição contável, não sensação.
-- Pronto = suíte verde na worktree, PR aberto, `./comms.py finish` executado, turno de origem resolvido e handoff postado com arquivos alterados, evidência (comando + saída resumida) e riscos restantes.
+- Pronto = suíte verde na worktree, PR aberto, `./comms.py finish` executado, turno de origem resolvido e handoff postado no template — `Objetivo:`, `Critérios:` atendidos com evidência (comando + saída resumida), `Fronteiras:` respeitadas — mais arquivos alterados, alternativas rejeitadas e riscos restantes.
 - Antes do post final, releia este prompt e confirme que respeitou os Limites.
 
 Comece sincronizando o estado e implemente apenas o item atribuído.

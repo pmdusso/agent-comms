@@ -26,6 +26,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 from string import Template
 
@@ -399,9 +400,36 @@ def guard_pii(*texts, force=False):
             )
 
 
+HANDOFF_CAMPOS = ("objetivo", "criterios", "fronteiras")
+
+
+def handoff_faltando(body):
+    """Campos obrigatórios ausentes num corpo de handoff (lista vazia = ok).
+
+    Delegação vaga é a falha nº 1 de orquestração medida (MAST, Anthropic):
+    objetivo, critérios verificáveis e fronteiras viajam COM o handoff, não na
+    cabeça de quem delega. Acento-insensível: 'Critérios:' e 'Criterios:' valem.
+    """
+    plano = "".join(
+        c
+        for c in unicodedata.normalize("NFKD", (body or "").lower())
+        if not unicodedata.combining(c)
+    )
+    return [campo for campo in HANDOFF_CAMPOS if f"{campo}:" not in plano]
+
+
 def cmd_post(db, a):
     body = a.corpo if a.corpo is not None else sys.stdin.read()
     guard_pii(a.titulo, body, a.refs, force=a.force)
+    if a.tipo == "handoff" and not a.force:
+        faltando = handoff_faltando(body)
+        if faltando:
+            sys.exit(
+                "ERRO: handoff sem os campos: "
+                + ", ".join(faltando)
+                + ". O corpo deve nomear 'Objetivo:', 'Critérios:' e 'Fronteiras:' "
+                "(delegação vaga vira retrabalho). Use --force se for exceção consciente."
+            )
     cur = db.execute(
         "INSERT INTO turns (sender, recipient, kind, title, body, refs) VALUES (?,?,?,?,?,?)",
         (a.de, a.para, a.tipo, a.titulo, body, a.refs),
@@ -1390,6 +1418,26 @@ def check():
             assert not vazamentos, "literais não-portáveis nos docs:\n" + "\n".join(
                 vazamentos
             )
+
+            # 1f. Coerência dos prompts: esqueleto completo, ênfase orçada e
+            # template de handoff em sincronia entre prompt (pm) e código (post).
+            # Contradição semântica é julgamento; isto guarda o que dá pra guardar.
+            for f in sorted(pack.glob("prompts/*.md")):
+                texto = f.read_text(encoding="utf-8")
+                for secao in ("## Antes de agir", "## Fluxo", "## Limites", "## Término"):
+                    assert secao in texto, f"{f.name}: seção '{secao}' ausente"
+                gritos = texto.count("NUNCA")
+                assert gritos <= 5, (
+                    f"{f.name}: {gritos}x NUNCA — se tudo grita, nada grita (máx 5)"
+                )
+            pm_texto = (pack / "prompts" / "pm.md").read_text(encoding="utf-8").lower()
+            for campo in ("objetivo", "critérios", "fronteiras"):
+                assert campo in pm_texto, (
+                    f"pm.md não cita o campo '{campo}' que cmd_post exige no handoff"
+                )
+            assert handoff_faltando("Objetivo: x\nCritérios: y\nFronteiras: z") == []
+            assert handoff_faltando("Criterios: sem acento\nObjetivo: x") == ["fronteiras"]
+            assert handoff_faltando("bora") == list(HANDOFF_CAMPOS)
         else:
             print(
                 f"AVISO check(): docs NAO varridos — {pack}/prompts e {pack}/skills "
