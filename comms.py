@@ -899,6 +899,16 @@ def test_command(db):
             r"^test\s*:", alvo.read_text(encoding="utf-8", errors="ignore"), re.M
         ):
             continue
+        # package.json sem script `test` tem o mesmo problema: `npm test` sai com
+        # erro em vez de rodar suíte. Existir package.json prova que é um repo Node,
+        # não que alguém escreveu testes nele.
+        if arquivo == "package.json":
+            try:
+                scripts = json.loads(alvo.read_text(encoding="utf-8")).get("scripts", {})
+            except (ValueError, OSError):
+                continue
+            if "test" not in scripts:
+                continue
         return cmd
     return None
 
