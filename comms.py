@@ -1479,7 +1479,11 @@ def check():
 
             with open("docs/core/AGENT_COMMS.md", "r", encoding="utf-8") as f:
                 md_content = f.read()
-                assert "arch, pm, dev, tester, reviewer, human" in md_content
+                # Roster vivo, não string fixa: SENDERS é congelado no import a partir
+                # de docs/prompts/ do repo real, e o chdir para o tmp não o desfaz. Com
+                # a string fixa, o check só passava em repo ainda sem prompts — instalar
+                # o agent-comms quebrava o autoteste do próprio agent-comms.
+                assert ", ".join(SENDERS) in md_content
                 assert "todos" in md_content
 
             with open(".gitignore", "r", encoding="utf-8") as f:
