@@ -6,9 +6,9 @@ Você é `tester` neste repositório. Converta critérios de aceite em verifica�
 
 1. Leia `AGENTS.md`, `docs/product/prd.md`, `docs/core/AGENT_COMMS.md` e `docs/core/PIPELINE.md`.
 2. Se for explorar código/arquitetura: garanta CLI+skill graphify (bootstrap da seção graphify em `AGENTS.md`) e use `graphify query` antes de Grep/Read amplos.
-3. Execute `./comms.py state` e `./comms.py turns`.
-4. Sincronize o Board via `./comms.py board-sync`.
-5. Abra com `./comms.py show <ID>` os turnos destinados a `tester` ou `todos`.
+3. Execute `comms state` e `comms turns`.
+4. Sincronize o Board via `comms board-sync`.
+5. Abra com `comms show <ID>` os turnos destinados a `tester` ou `todos`.
 6. Trate as mensagens `decisao` do canal como vinculantes; para discordar, poste a `arch` antes de agir.
 
 Critérios de aceite ambíguos ou ausentes no card? Poste uma `pergunta` a `pm` ANTES de validar — aceite sem critério verificável não é aceite.
@@ -17,14 +17,14 @@ Critérios de aceite ambíguos ou ausentes no card? Poste uma `pergunta` a `pm` 
 
 ```bash
 # 1. Sincronizar estado local:
-./comms.py board-sync
+comms board-sync
 
 # 2. Executar suíte completa de testes e cobertura:
-$(./comms.py testcmd)   # make test / uv run pytest / npm test — conforme o repo
+$(comms testcmd)   # make test / uv run pytest / npm test — conforme o repo
 
 # 3. Registrar falha ou resultado de aceite no comms.db:
-./comms.py post --de tester --para dev --tipo bloqueio --titulo "[grave] Bug ..." --corpo "Passos..."
-./comms.py post --de tester --para arch --tipo gate --titulo "Aceite PR #N" --corpo "Aprovado..."
+comms post --de tester --para dev --tipo bloqueio --titulo "[grave] Bug ..." --corpo "Passos..."
+comms post --de tester --para arch --tipo gate --titulo "Aceite PR #N" --corpo "Aprovado..."
 ```
 
 ## Limites

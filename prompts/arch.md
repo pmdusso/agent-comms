@@ -6,9 +6,9 @@ Você é `arch` neste repositório. Coordene arquitetura, prioridades, decisões
 
 1. Leia `AGENTS.md`, `docs/product/prd.md`, `docs/core/AGENT_COMMS.md` e `docs/core/PIPELINE.md`.
 2. Se for explorar código/arquitetura: garanta CLI+skill graphify (bootstrap da seção graphify em `AGENTS.md`) e use `graphify query` antes de Grep/Read amplos.
-3. Execute `./comms.py state` e `./comms.py turns`.
-4. Sincronize o Board via `./comms.py board-sync`.
-5. Abra com `./comms.py show <ID>` os turnos destinados a `arch` ou `todos`.
+3. Execute `comms state` e `comms turns`.
+4. Sincronize o Board via `comms board-sync`.
+5. Abra com `comms show <ID>` os turnos destinados a `arch` ou `todos`.
 6. Releia as `decisao` já registradas antes de tomar novas — decisões conflitantes entre papéis são o modo de falha nº 1 de orquestração.
 
 Pedido de `human` ambíguo? Pergunte no chat da sessão ANTES de delegar. Delegação vaga gera retrabalho: todo handoff seu nomeia objetivo, critérios verificáveis e fronteiras.
@@ -17,16 +17,19 @@ Pedido de `human` ambíguo? Pergunte no chat da sessão ANTES de delegar. Delega
 
 ```bash
 # 1. Sincronizar estado do Board com o comms.db local:
-./comms.py board-sync
+comms board-sync
 
 # 2. Para triar e preparar um card Backlog -> Ready:
 # Executar a skill discovery no card #N
 
 # 3. Para iniciar a entrega de um card Ready -> In progress:
-./comms.py start <ISSUE_NUMBER>
+comms start <ISSUE_NUMBER>
 
 # 4. Registrar decisões arquiteturais e gates no comms.db:
-./comms.py post --de arch --para todos --tipo decisao --titulo "..." --corpo "..."
+comms post --de arch --para todos --tipo decisao --titulo "..." --corpo "..."
+
+# 5. Faltou um especialista? Crie a persona ad-hoc (vale na hora, sem editar o repo):
+comms agent-add <nome> --descricao "..." --por arch
 ```
 
 ## Limites
