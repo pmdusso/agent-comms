@@ -75,3 +75,20 @@ fn clap_version_reports_package_version() {
     assert!(output.status.success());
     assert_eq!(String::from_utf8_lossy(&output.stdout), "comms 5.0.0\n");
 }
+
+#[test]
+fn bare_repository_worktree_uses_its_own_root() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("source");
+    init_repo(&source);
+    let bare = tmp.path().join("bare.git");
+    common::git(tmp.path(), &["clone", "-q", "--bare", source.to_str().unwrap(), bare.to_str().unwrap()]);
+    let worktree = tmp.path().join("wt");
+    common::git(&bare, &["worktree", "add", "-q", "-b", "linked", worktree.to_str().unwrap(), "dev"]);
+    fs::write(worktree.join("comms.db"), "").unwrap();
+    fs::write(tmp.path().join("comms.db"), "").unwrap();
+
+    let doc = json(&run(&worktree, &["--json", "version"]));
+
+    assert_eq!(doc["db_path"], worktree.join("comms.db").canonicalize().unwrap().to_str().unwrap());
+}

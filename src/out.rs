@@ -43,7 +43,11 @@ impl Out {
         self.doc = Some(doc);
     }
 
-    pub fn flush(&self) {
+    pub fn flush(&self) -> std::io::Result<()> {
+        self.flush_to(&mut std::io::stdout().lock())
+    }
+
+    fn flush_to(&self, writer: &mut dyn Write) -> std::io::Result<()> {
         let result = if self.json {
             let mut doc = self.doc.clone().unwrap_or_else(|| json!({}));
             if !self.warnings.is_empty() {
@@ -51,14 +55,13 @@ impl Out {
             }
             let mut bytes = serde_json::to_vec(&doc).unwrap_or_else(|_| b"{}".to_vec());
             bytes.push(b'\n');
-            std::io::stdout().lock().write_all(&bytes)
+            writer.write_all(&bytes)
         } else {
-            std::io::stdout().lock().write_all(self.text.as_bytes())
+            writer.write_all(self.text.as_bytes())
         };
-        if let Err(error) = result
-            && error.kind() != ErrorKind::BrokenPipe
-        {
-            let _ = writeln!(std::io::stderr().lock(), "ERRO de E/S: {error}");
+        match result {
+            Err(error) if error.kind() == ErrorKind::BrokenPipe => Ok(()),
+            result => result,
         }
     }
 }
@@ -79,5 +82,32 @@ pub fn emit_error(json_mode: bool, error: &CommsError, warnings: &[String]) {
         let _ = std::io::stderr().lock().write_all(&bytes);
     } else {
         let _ = writeln!(std::io::stderr().lock(), "{}", error.message);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    struct FailingWriter(ErrorKind);
+
+    impl Write for FailingWriter {
+        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+            Err(io::Error::new(self.0, "falha de teste"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn flush_to_distinguishes_broken_pipe_from_real_errors() {
+        let mut out = Out::new(false);
+        out.say("conteúdo");
+        assert_eq!(out.flush_to(&mut FailingWriter(ErrorKind::BrokenPipe)).unwrap(), ());
+        let error = out.flush_to(&mut FailingWriter(ErrorKind::WriteZero)).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::WriteZero);
     }
 }

@@ -4,6 +4,24 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+fn is_bare_git_dir(path: &Path) -> bool {
+    let Ok(config) = fs::read_to_string(path.join("config")) else { return false };
+    let mut in_core = false;
+    for line in config.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_core = line.eq_ignore_ascii_case("[core]");
+            continue;
+        }
+        if in_core
+            && let Some((key, value)) = line.split_once('=')
+            && key.trim().eq_ignore_ascii_case("bare")
+        {
+            return value.trim().eq_ignore_ascii_case("true");
+        }
+    }
+    false
+}
+
 pub fn git_main_root(start: &Path) -> Option<PathBuf> {
     for dir in start.ancestors() {
         let marker = dir.join(".git");
@@ -21,10 +39,11 @@ pub fn git_main_root(start: &Path) -> Option<PathBuf> {
         let commondir = gitdir.join("commondir");
         if commondir.exists() {
             let common = fs::read_to_string(commondir).ok()?;
-            return fs::canonicalize(gitdir.join(common.trim()))
-                .ok()?
-                .parent()
-                .map(Path::to_path_buf);
+            let common = fs::canonicalize(gitdir.join(common.trim())).ok()?;
+            if is_bare_git_dir(&common) {
+                return dir.canonicalize().ok();
+            }
+            return common.parent().map(Path::to_path_buf);
         }
         return dir.canonicalize().ok();
     }

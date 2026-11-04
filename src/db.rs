@@ -77,6 +77,22 @@ pub fn checkpoint(conn: &Connection) {
     let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
 }
 
+pub fn reset(conn: &mut Connection) -> Result<()> {
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    for (kind, sql) in [("view", "DROP VIEW"), ("table", "DROP TABLE")] {
+        let mut stmt = tx.prepare("SELECT name FROM sqlite_master WHERE type=?1 AND name NOT LIKE 'sqlite_%' ORDER BY name")?;
+        let names = stmt.query_map([kind], |row| row.get::<_, String>(0))?.collect::<std::result::Result<Vec<_>, _>>()?;
+        drop(stmt);
+        for name in names {
+            let quoted = name.replace('"', "\"\"");
+            tx.execute(&format!("{sql} IF EXISTS \"{quoted}\""), [])?;
+        }
+    }
+    tx.execute_batch(&schema_sql())?;
+    tx.commit()?;
+    Ok(())
+}
+
 pub fn table_exists(conn: &Connection, table: &str) -> Result<bool> {
     Ok(conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",

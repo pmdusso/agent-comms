@@ -71,3 +71,37 @@ fn empty_optional_strings_are_invisible_in_text_output() {
         assert!(!text.contains("[]"), "args={args:?} output={text}");
     }
 }
+
+#[test]
+fn bootstrap_force_resets_in_place_for_existing_connections() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("comms.db");
+    assert!(run_db(tmp.path(), &db, &["bootstrap"]).status.success());
+    let idle = rusqlite::Connection::open(&db).unwrap();
+    idle.query_row("SELECT COUNT(*) FROM turns", [], |_| Ok(())).unwrap();
+
+    let forced = run_db(tmp.path(), &db, &["bootstrap", "--force"]);
+    assert!(forced.status.success(), "stderr={}", String::from_utf8_lossy(&forced.stderr));
+    idle.execute(
+        "INSERT INTO turns (sender,recipient,kind,title,body) VALUES ('arch','dev','mensagem','depois','do reset')",
+        [],
+    ).unwrap();
+
+    let fresh = rusqlite::Connection::open(&db).unwrap();
+    let visible: i64 = fresh.query_row("SELECT COUNT(*) FROM turns WHERE title='depois'", [], |row| row.get(0)).unwrap();
+    assert_eq!(visible, 1, "a conexão antiga gravou num inode desvinculado");
+}
+
+#[test]
+fn bootstrap_ignores_the_selected_database_and_sidecars() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("runtime.sqlite");
+
+    let output = run_db(tmp.path(), &db, &["bootstrap"]);
+
+    assert!(output.status.success(), "stderr={}", String::from_utf8_lossy(&output.stderr));
+    let gitignore = fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
+    for entry in ["runtime.sqlite", "runtime.sqlite-wal", "runtime.sqlite-shm"] {
+        assert_eq!(gitignore.lines().filter(|line| *line == entry).count(), 1, "entrada ausente: {entry}");
+    }
+}

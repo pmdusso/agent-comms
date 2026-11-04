@@ -102,6 +102,12 @@ fn default_conflict_error(name: &str) -> CommsError {
     CommsError::new(Code::Conflict, format!("ERRO: '{name}' é persona padrão (docs/prompts/{name}.md); edite o arquivo."))
 }
 
+fn generated_prompt(name: &str, created_by: &str, description: &str) -> String {
+    roster::render(AGENT_PROMPT_TEMPLATE, &[
+        ("NOME", &name.to_uppercase()), ("nome", name), ("por", created_by), ("descricao", description),
+    ])
+}
+
 pub fn agent_add(conn: &Connection, roster: &Roster, args: &AgentAddArgs, out: &mut Out) -> Result<u8> {
     roster.check_sender("--por", &args.por)?;
     if !roster::valid_agent_name(&args.nome) {
@@ -123,9 +129,7 @@ pub fn agent_add(conn: &Connection, roster: &Roster, args: &AgentAddArgs, out: &
             validate_prompt(&prompt, args.force)?;
             prompt
         }
-        None => roster::render(AGENT_PROMPT_TEMPLATE, &[
-            ("NOME", &args.nome.to_uppercase()), ("nome", &args.nome), ("por", &args.por), ("descricao", &description),
-        ]),
+        None => generated_prompt(&args.nome, &args.por, &description),
     };
     pii_check(&[Some(&description), Some(&prompt)], args.force)?;
     conn.execute(
@@ -141,14 +145,25 @@ pub fn agent_add(conn: &Connection, roster: &Roster, args: &AgentAddArgs, out: &
     Ok(0)
 }
 
-pub fn agent_set(conn: &Connection, roster: &Roster, args: &AgentSetArgs, out: &mut Out) -> Result<u8> {
+pub fn agent_set(conn: &mut Connection, roster: &Roster, args: &AgentSetArgs, out: &mut Out) -> Result<u8> {
+    agent_set_with_probe(conn, roster, args, out, || {})
+}
+
+fn agent_set_with_probe(conn: &mut Connection, roster: &Roster, args: &AgentSetArgs, out: &mut Out, probe: impl FnOnce()) -> Result<u8> {
     if default_conflict(roster, &args.nome) {
         return Err(default_conflict_error(&args.nome));
     }
-    let current = row_by_name(conn, &args.nome)?.ok_or_else(|| CommsError::new(Code::NotFound, format!("ERRO: agente ad-hoc '{}' não existe.", args.nome)))?;
     if args.descricao.is_none() && args.prompt_file.is_none() {
         return Err(CommsError::new(Code::Invalid, "nada para atualizar"));
     }
+    let provided_prompt = args.prompt_file.as_ref().map(|path| -> Result<String> {
+        let prompt = read_prompt(path)?;
+        validate_prompt(&prompt, args.force)?;
+        Ok(prompt)
+    }).transpose()?;
+
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    let current = row_by_name(&tx, &args.nome)?.ok_or_else(|| CommsError::new(Code::NotFound, format!("ERRO: agente ad-hoc '{}' não existe.", args.nome)))?;
     let description = match &args.descricao {
         Some(value) => {
             let value = normalize_description(value);
@@ -159,24 +174,24 @@ pub fn agent_set(conn: &Connection, roster: &Roster, args: &AgentSetArgs, out: &
         }
         None => current.description.clone(),
     };
-    let prompt = match &args.prompt_file {
-        Some(path) => {
-            let prompt = read_prompt(path)?;
-            validate_prompt(&prompt, args.force)?;
-            prompt
-        }
+    let previous_default = generated_prompt(&args.nome, &current.created_by, &current.description);
+    let prompt = match provided_prompt {
+        Some(prompt) => prompt,
+        None if args.descricao.is_some() && current.prompt == previous_default => generated_prompt(&args.nome, &current.created_by, &description),
         None => current.prompt.clone(),
     };
     pii_check(&[Some(&description), Some(&prompt)], args.force)?;
-    conn.execute(
+    probe();
+    tx.execute(
         "UPDATE agents SET description=?2, prompt=?3, updated_at=datetime('now','localtime') WHERE name=?1",
         params![args.nome, description, prompt],
     )?;
-    out.say(format!("agente {} atualizado", args.nome));
-    let row = row_by_name(conn, &args.nome)?.ok_or_else(|| CommsError::new(Code::Internal, "ERRO SQLite: agente atualizado não encontrado"))?;
+    let row = row_by_name(&tx, &args.nome)?.ok_or_else(|| CommsError::new(Code::Internal, "ERRO SQLite: agente atualizado não encontrado"))?;
     let agent = agent_from_row(&row);
     let mut value = agent_value(&agent, row.description.clone(), None);
     value["prompt"] = json!(row.prompt);
+    tx.commit()?;
+    out.say(format!("agente {} atualizado", args.nome));
     out.set(json!({"agent": value}));
     Ok(0)
 }
@@ -332,4 +347,32 @@ pub fn brief(conn: &Connection, roster: &Roster, args: &BriefArgs, out: &mut Out
         "turns": turns,
     }));
     Ok(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db;
+    use std::time::Duration;
+
+    #[test]
+    fn agent_set_holds_write_lock_from_read_through_update() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut conn = db::open_rw(&tmp.path().join("comms.db")).unwrap();
+        conn.execute(
+            "INSERT INTO agents (name,description,prompt,created_by) VALUES ('dba','old','prompt','arch')",
+            [],
+        ).unwrap();
+        let roster = Roster::load(None, Some(&conn)).unwrap();
+        let args = AgentSetArgs { nome: "dba".into(), descricao: Some("new".into()), prompt_file: None, force: false };
+        let other = Connection::open(tmp.path().join("comms.db")).unwrap();
+        other.busy_timeout(Duration::ZERO).unwrap();
+        let mut blocked = false;
+
+        agent_set_with_probe(&mut conn, &roster, &args, &mut Out::new(true), || {
+            blocked = other.execute("UPDATE agents SET prompt='concurrent' WHERE name='dba'", []).is_err();
+        }).unwrap();
+
+        assert!(blocked, "outra conexão escreveu entre a leitura e o UPDATE de agent-set");
+    }
 }

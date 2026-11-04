@@ -9,7 +9,7 @@ use rusqlite::{Connection, TransactionBehavior};
 use serde_json::{Value, json};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const AGENT_COMMS_TEMPLATE: &str = include_str!("../../templates/AGENT_COMMS.md");
 const PIPELINE_TEMPLATE: &str = include_str!("../../templates/PIPELINE.md");
@@ -99,25 +99,13 @@ fn write_doc(home: &Path, relative: &str, content: &str, out: &mut Out) -> Resul
     Ok(json!({"path": relative, "written": true}))
 }
 
-fn suffixed(path: &Path, suffix: &str) -> PathBuf {
-    let mut value = path.as_os_str().to_os_string();
-    value.push(suffix);
-    PathBuf::from(value)
-}
-
 pub fn bootstrap(ctx: &Ctx, args: &BootstrapArgs, out: &mut Out) -> Result<u8> {
     let target = ctx.bootstrap_db();
-    if args.force && target.exists() {
-        for suffix in ["", "-wal", "-shm"] {
-            let path = suffixed(&target, suffix);
-            if path.exists()
-                && let Err(error) = fs::remove_file(&path)
-            {
-                out.warn(format!("Aviso ao remover {}: {error}", path.display()));
-            }
-        }
+    let existed = target.exists();
+    let mut conn = db::open_rw(&target)?;
+    if args.force && existed {
+        db::reset(&mut conn)?;
     }
-    let conn = db::open_rw(&target)?;
     db::checkpoint(&conn);
     out.say(format!("Banco de dados inicializado com sucesso em '{}' (modo WAL ativado).", target.display()));
     let home = target.parent().unwrap_or(&ctx.cwd);
@@ -142,8 +130,9 @@ pub fn bootstrap(ctx: &Ctx, args: &BootstrapArgs, out: &mut Out) -> Result<u8> {
     let gitignore_path = home.join(".gitignore");
     let existing = fs::read_to_string(&gitignore_path).unwrap_or_default();
     let existing_entries: Vec<&str> = existing.lines().map(str::trim).collect();
-    let entries = ["comms.db", "comms.db-wal", "comms.db-shm"];
-    let to_add: Vec<&str> = entries.into_iter().filter(|entry| !existing_entries.contains(entry)).collect();
+    let database = target.file_name().map(|name| name.to_string_lossy()).unwrap_or_else(|| "comms.db".into());
+    let entries = [database.to_string(), format!("{database}-wal"), format!("{database}-shm")];
+    let to_add: Vec<String> = entries.into_iter().filter(|entry| !existing_entries.contains(&entry.as_str())).collect();
     if !to_add.is_empty() {
         let bytes = fs::read(&gitignore_path).unwrap_or_default();
         let prefix = if !bytes.is_empty() && !bytes.ends_with(b"\n") { "\n" } else { "" };

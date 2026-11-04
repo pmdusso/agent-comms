@@ -47,10 +47,22 @@ if ! command -v cargo >/dev/null 2>&1; then
     echo "ERRO: cargo não encontrado — instale Rust via rustup e rode de novo." >&2
     exit 1
 fi
-cargo build --release --locked --manifest-path "$SOURCE_DIR/Cargo.toml"
+CARGO_BUILD_DIR="${CARGO_TARGET_DIR:-$SOURCE_DIR/target}"
+HOST_TARGET=''
+while read -r key value; do
+    if [ "$key" = 'host:' ]; then
+        HOST_TARGET="$value"
+        break
+    fi
+done < <(rustc -vV)
+if [ -z "$HOST_TARGET" ]; then
+    echo "ERRO: não deu para determinar o target host via rustc -vV." >&2
+    exit 1
+fi
+cargo build --release --locked --manifest-path "$SOURCE_DIR/Cargo.toml" --target-dir "$CARGO_BUILD_DIR" --target "$HOST_TARGET"
 mkdir -p "$BIN_DIR"
 BIN_DIR="$(cd "$BIN_DIR" && pwd)"
-install -m 0755 "$SOURCE_DIR/target/release/comms" "$BIN_DIR/comms"
+install -m 0755 "$CARGO_BUILD_DIR/$HOST_TARGET/release/comms" "$BIN_DIR/comms"
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
     *) echo "AVISO: $BIN_DIR não está no PATH — adicione ao seu shell rc." ;;

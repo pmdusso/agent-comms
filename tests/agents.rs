@@ -46,7 +46,10 @@ fn adhoc_agent_lifecycle_updates_roster_brief_and_orphans() {
 
     ok(&tmp, &db, &["agent-set", "dba", "--descricao", "tuning e índices"]);
     let brief = ok(&tmp, &db, &["brief", "dba"]);
-    assert!(String::from_utf8_lossy(&brief.stdout).contains("Você é `dba`"));
+    let brief_text = String::from_utf8_lossy(&brief.stdout);
+    assert!(brief_text.contains("Você é `dba`"));
+    assert!(brief_text.contains("): tuning e índices\n"), "brief manteve a descrição antiga: {brief_text}");
+    assert!(!brief_text.contains("): tuning\n"), "brief manteve o escopo antigo: {brief_text}");
     let arch_brief = ok(&tmp, &db, &["brief", "arch"]);
     let arch_text = String::from_utf8_lossy(&arch_brief.stdout);
     assert!(arch_text.contains("-- Roster --"));
@@ -121,4 +124,18 @@ fn agent_set_requires_existing_adhoc_and_a_change() {
     ok(&tmp, &db, &["agent-add", "dba", "--descricao", "x", "--por", "arch"]);
     let unchanged = run_db(tmp.path(), &db, &["--json", "agent-set", "dba"]);
     assert_eq!(error_doc(&unchanged)["error"]["code"], "invalid");
+}
+
+#[test]
+fn agent_set_description_preserves_a_custom_prompt() {
+    let (tmp, db) = setup(true);
+    let custom = "# DBA customizado\n\n## Antes de agir\nLeia o contexto.\n\n## Fluxo\nTrabalhe.\n\n## Limites\nNUNCA saia do escopo.\n\n## Término\nReporte.\n";
+    let path = tmp.path().join("custom.md");
+    fs::write(&path, custom).unwrap();
+    ok(&tmp, &db, &["agent-add", "dba", "--descricao", "antiga", "--por", "arch", "--prompt-file", path.to_str().unwrap()]);
+
+    ok(&tmp, &db, &["agent-set", "dba", "--descricao", "nova"]);
+
+    let shown = ok(&tmp, &db, &["agent-show", "dba", "--adhoc"]);
+    assert_eq!(String::from_utf8_lossy(&shown.stdout), custom);
 }

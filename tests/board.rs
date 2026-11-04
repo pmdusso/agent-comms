@@ -194,7 +194,9 @@ fn finish_only_completes_exact_issue_refs_and_comments() {
     assert_eq!(items.iter().find(|item| item["id"] == 2).unwrap()["status"], "aberto");
     let turns = json(&fake.ok(&["turns", "--all", "--json"]));
     assert_eq!(turns["turns"][0]["kind"], "gate");
-    assert!(fs::read_to_string(&fake.args).unwrap().contains("issue comment 7"));
+    let args = fs::read_to_string(&fake.args).unwrap();
+    assert!(args.contains("--single-select-option-id opt_review"));
+    assert!(args.contains("issue comment 7"));
 }
 
 #[test]

@@ -33,18 +33,26 @@ pub fn run() -> ExitCode {
     };
     let mut out = Out::new(cli.json);
     match execute(cli.cmd, &mut out) {
-        Ok(code) => {
-            out.flush();
-            ExitCode::from(code)
-        }
+        Ok(code) => match out.flush() {
+            Ok(()) => ExitCode::from(code),
+            Err(error) => output_error(&out, error),
+        },
         Err(error) => {
-            if !out.json {
-                out.flush();
+            if !out.json
+                && let Err(flush_error) = out.flush()
+            {
+                return output_error(&out, flush_error);
             }
             out::emit_error(out.json, &error, &out.warnings);
             ExitCode::from(error.exit_code())
         }
     }
+}
+
+fn output_error(out: &Out, error: std::io::Error) -> ExitCode {
+    let error = CommsError::from(error);
+    out::emit_error(out.json, &error, &out.warnings);
+    ExitCode::from(error.exit_code())
 }
 
 fn execute(cmd: Cmd, out: &mut Out) -> Result<u8> {
@@ -89,7 +97,7 @@ fn execute(cmd: Cmd, out: &mut Out) -> Result<u8> {
         Cmd::Agents => cmd::agents::agents(&conn, &roster, prompts_dir.as_deref(), out),
         Cmd::Brief(args) => cmd::agents::brief(&conn, &roster, &args, out),
         Cmd::AgentAdd(args) => cmd::agents::agent_add(&conn, &roster, &args, out),
-        Cmd::AgentSet(args) => cmd::agents::agent_set(&conn, &roster, &args, out),
+        Cmd::AgentSet(args) => cmd::agents::agent_set(&mut conn, &roster, &args, out),
         Cmd::AgentRm(args) => cmd::agents::agent_rm(&conn, &args, out),
         Cmd::AgentShow(args) => cmd::agents::agent_show(&conn, &roster, &args, out),
         Cmd::Start(args) => cmd::board::start(&mut conn, &ctx, &roster, &args, out),

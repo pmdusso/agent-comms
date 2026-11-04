@@ -105,6 +105,39 @@ pub fn start(conn: &mut Connection, ctx: &Ctx, roster: &Roster, args: &StartArgs
     Ok(0)
 }
 
+fn finish_local(conn: &mut Connection, issue: u64, pr: &str) -> Result<(usize, i64)> {
+    finish_local_with_probe(conn, issue, pr, || {})
+}
+
+fn finish_local_with_probe(conn: &mut Connection, issue: u64, pr: &str, probe: impl FnOnce()) -> Result<(usize, i64)> {
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let pattern = format!("%issue:{issue}%");
+    let token = format!("issue:{issue}");
+    let mut stmt = tx.prepare("SELECT id, refs FROM work_items WHERE refs LIKE ?1")?;
+    let ids: Vec<i64> = stmt.query_map([pattern], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?)))?
+        .collect::<std::result::Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|(_, refs)| refs_has_token(refs.as_deref(), &token))
+        .map(|(id, _)| id)
+        .collect();
+    drop(stmt);
+    probe();
+    for id in &ids {
+        tx.execute("UPDATE work_items SET status='feito', updated_at=datetime('now','localtime') WHERE id=?1", [id])?;
+    }
+    tx.execute(
+        "INSERT INTO turns (sender, recipient, kind, title, body, refs) VALUES ('dev', 'reviewer', 'gate', ?1, ?2, ?3)",
+        params![
+            format!("PR pronto #{issue}"),
+            format!("PR={pr}; entrega concluída e aguardando G4/G5 (review + merge do human)."),
+            format!("issue:{issue} pr:{pr}"),
+        ],
+    )?;
+    let turn_id = tx.last_insert_rowid();
+    tx.commit()?;
+    Ok((ids.len(), turn_id))
+}
+
 pub fn finish(conn: &mut Connection, args: &FinishArgs, out: &mut Out) -> Result<u8> {
     let repo = gh::repo(conn)?;
     let cfg = gh::board_cfg(conn)?;
@@ -116,38 +149,14 @@ pub fn finish(conn: &mut Connection, args: &FinishArgs, out: &mut Out) -> Result
         None => None,
     };
 
-    let pattern = format!("%issue:{}%", args.issue);
-    let token = format!("issue:{}", args.issue);
-    let mut stmt = conn.prepare("SELECT id, refs FROM work_items WHERE refs LIKE ?1")?;
-    let ids: Vec<i64> = stmt.query_map([pattern], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?)))?
-        .collect::<std::result::Result<Vec<_>, _>>()?
-        .into_iter()
-        .filter(|(_, refs)| refs_has_token(refs.as_deref(), &token))
-        .map(|(id, _)| id)
-        .collect();
-    drop(stmt);
-
-    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    for id in &ids {
-        tx.execute("UPDATE work_items SET status='feito', updated_at=datetime('now','localtime') WHERE id=?1", [id])?;
-    }
-    tx.execute(
-        "INSERT INTO turns (sender, recipient, kind, title, body, refs) VALUES ('dev', 'reviewer', 'gate', ?1, ?2, ?3)",
-        params![
-            format!("PR pronto #{}", args.issue),
-            format!("PR={}; entrega concluída e aguardando G4/G5 (review + merge do human).", args.pr),
-            format!("issue:{} pr:{}", args.issue, args.pr),
-        ],
-    )?;
-    let turn_id = tx.last_insert_rowid();
-    tx.commit()?;
+    let (items_done, turn_id) = finish_local(conn, args.issue, &args.pr)?;
 
     gh::issue_comment(&repo.2, args.issue, &format!("🚀 **Entrega em review!** PR aberto: {}", args.pr))?;
     out.say(format!("✓ Comentário adicionado na Issue #{} no GitHub.", args.issue));
     out.say("✓ Registro no comms.db e transição para In review concluída.");
     out.set(json!({
         "issue": args.issue, "title": title, "pr": args.pr, "board": board,
-        "items_done": ids.len(), "turn_id": turn_id, "commented": true,
+        "items_done": items_done, "turn_id": turn_id, "commented": true,
     }));
     Ok(0)
 }
@@ -212,7 +221,10 @@ pub fn board_set(conn: &Connection, args: &BoardSetArgs, out: &mut Out) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use super::slug_and_branch;
+    use super::{finish_local_with_probe, slug_and_branch};
+    use crate::db;
+    use rusqlite::Connection;
+    use std::time::Duration;
 
     #[test]
     fn slug_and_branch_normalize_unicode_and_boundaries() {
@@ -228,5 +240,28 @@ mod tests {
             slug_and_branch(7, &format!("{} b", "a".repeat(24))).1,
             format!("feat/7-{}-", "a".repeat(24))
         );
+    }
+
+    #[test]
+    fn finish_selects_refs_under_the_write_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("comms.db");
+        let mut conn = db::open_rw(&path).unwrap();
+        conn.execute(
+            "INSERT INTO work_items (title,owner,scope,refs) VALUES ('item','dev','cross','issue:7')",
+            [],
+        ).unwrap();
+        let other = Connection::open(&path).unwrap();
+        other.busy_timeout(Duration::ZERO).unwrap();
+        let mut blocked = false;
+
+        let (done, _) = finish_local_with_probe(&mut conn, 7, "https://example.test/pr/7", || {
+            blocked = other.execute("UPDATE work_items SET refs='issue:8' WHERE id=1", []).is_err();
+        }).unwrap();
+
+        assert!(blocked, "refs mudaram entre o SELECT e o UPDATE de finish");
+        assert_eq!(done, 1);
+        let (status, refs): (String, String) = conn.query_row("SELECT status,refs FROM work_items WHERE id=1", [], |row| Ok((row.get(0)?, row.get(1)?))).unwrap();
+        assert_eq!((status.as_str(), refs.as_str()), ("feito", "issue:7"));
     }
 }
