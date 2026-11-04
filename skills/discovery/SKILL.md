@@ -29,7 +29,7 @@ irreversível continuam bloqueantes.
 
 - Número da issue no repo do board
 - Board configurado no `comms.db` (defaults: project `1`, owner `@me`, repo do cwd):
-  `./comms.py set board.project N` / `board.owner` / `board.repo`
+  `comms set board.project N` / `board.owner` / `board.repo`
 
 Se `gh` falhar com missing `read:project` / `project`:
 
@@ -39,13 +39,13 @@ gh auth refresh -h github.com -s read:project,project
 
 ## Board
 
-Não montar chamadas `gh project` na mão: o `comms.py` resolve project-id,
+Não montar chamadas `gh project` na mão: o `comms` resolve project-id,
 field-id e option-ids pela API, então nenhum ID vive nesta skill.
 
 ```bash
 gh issue view N --json number,title,body,labels,url   # -R só se o board apontar outro repo
-./comms.py board-item N          # item-id + coluna atual (erro se o card não existe)
-./comms.py board-set N Ready     # move o card
+comms board-item N          # item-id + coluna atual (erro se o card não existe)
+comms board-set N Ready     # move o card
 ```
 
 `board-item` falha se a issue não estiver no board — nesse caso, adicionar o
@@ -102,7 +102,7 @@ parar e reconciliar.
 ### 1) Repo grounding (antes da web)
 
 Ler o que for pertinente: specs de arquitetura do repo, specs/planos irmãos,
-código citado, `./comms.py turns|items|state`, issues linkadas no board.
+código citado, `comms turns|items|state`, issues linkadas no board.
 Anotar invariantes e gaps.
 
 ### 2) Pesquisa externa
@@ -192,7 +192,7 @@ Depois:
    - mover o board para **Ready**.
 
 ```bash
-./comms.py post --de arch --para todos --tipo gate \
+comms post --de arch --para todos --tipo gate \
   --titulo "discovery Ready #N" \
   --corpo "spec+plan reviewed; assumptions no body; Status=Ready"
 ```
@@ -217,4 +217,4 @@ reversível e não sensível (invariante B).
 
 - `docs/core/PIPELINE.md` — F1/F2 e política de débito
 - Skills: `brainstorming`, `writing-plans`, `ai-review`
-- Board: `./comms.py board-sync` (config em `board.project` / `board.owner`)
+- Board: `comms board-sync` (config em `board.project` / `board.owner`)

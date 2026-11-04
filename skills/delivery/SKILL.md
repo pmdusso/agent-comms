@@ -22,7 +22,7 @@ sem GO explícito do `human`.
 | Isolamento | **worktree** (`.worktrees/…`) | Protege o tronco; casa com SDD |
 | Executor de plano | **subagent-driven-development** | Review por task; melhor que sessão monolítica |
 | Fallback | **executing-plans** | Só se subagents indisponíveis ou `human` pedir inline |
-| Review de código | **Cubic** (`cubic review --base $(./comms.py trunk)`) | Diff-focused; findings viram work_item |
+| Review de código | **Cubic** (`cubic review --base $(comms trunk)`) | Diff-focused; findings viram work_item |
 | Review extra | **ai-review** `-a balanced` no diff | Só se tocar auth/billing/compliance/purge/TTL |
 | Integração | **PR** (`gh pr create`) + Status **In review** | Merge = `human` (G5) |
 | Assumptions (B) | Tratar como **requisitos** | Até `human` invalidar; não reinventar discovery |
@@ -38,13 +38,13 @@ sem GO explícito do `human`.
 - Número da issue no repo do board
 - Board configurado no `comms.db` (defaults: project `1`, owner `@me`, repo do cwd)
 
-Nenhum ID de board vive nesta skill: o `comms.py` resolve project-id, field-id e
+Nenhum ID de board vive nesta skill: o `comms` resolve project-id, field-id e
 option-ids pela API do `gh`.
 
 ```bash
 gh auth refresh -h github.com -s read:project,project   # se faltar scope
 gh issue view N --json number,title,body,labels,url
-./comms.py board-item N          # item-id + coluna atual
+comms board-item N          # item-id + coluna atual
 ```
 
 Confirmar `status == "Ready"` antes de seguir. Se `board-item` falhar, o card não
@@ -61,12 +61,12 @@ está no board — adicionar e consultar de novo.
 - Testes:
 
 ```bash
-$(./comms.py testcmd)
+$(comms testcmd)
 ```
 
 O comando sai de `test.cmd` no `comms.db`, ou da convenção do ecossistema
 (`Makefile` com alvo `test`, `pyproject.toml`, `package.json`, `Cargo.toml`,
-`go.mod`). Ajuste com `./comms.py set test.cmd "..."` se o repo fugir do padrão.
+`go.mod`). Ajuste com `comms set test.cmd "..."` se o repo fugir do padrão.
 
 - Comandos de cloud (`gcloud`, `aws`, `firebase`) sempre com conta e projeto
   explícitos — nunca no default ambiente. Deploy só com GO.
@@ -87,12 +87,12 @@ O comando sai de `test.cmd` no `comms.db`, ou da convenção do ecossistema
 Rode o comando de orquestração unificada v3:
 
 ```bash
-./comms.py start <ISSUE_NUMER>
+comms start <ISSUE_NUMBER>
 ```
 
 Esse comando executa atomicamente em 1 único passo:
 1. Altera o status no GitHub Projects Board para **In progress**.
-2. Cria o git worktree em `.worktrees/issue-<N>-<slug>` a partir do tronco atualizado (`./comms.py trunk`).
+2. Cria o git worktree em `.worktrees/issue-<N>-<slug>` a partir do tronco atualizado (`comms trunk`).
 3. Cria o item de trabalho e grava o turno de `handoff` no `comms.db`.
 
 ---
@@ -131,7 +131,7 @@ Após o plano completo (ou antes do PR):
 
 ### 3a) Preflight de segurança (obrigatório)
 
-Inspecionar somente `git diff $(./comms.py trunk)...HEAD` e os arquivos alvo. Não incluir
+Inspecionar somente `git diff $(comms trunk)...HEAD` e os arquivos alvo. Não incluir
 untracked alheio. Verificar segredos, credenciais e PII antes de qualquer envio;
 se houver dúvida ou a redação mudar o sentido do review, parar e pedir decisão.
 
@@ -140,20 +140,20 @@ se houver dúvida ou a redação mudar o sentido do review, parar e pedir decis�
 ```bash
 cubic --version 2>/dev/null || echo "NOT_INSTALLED"
 # na worktree, contra o tronco:
-cubic review --base $(./comms.py trunk) --json
+cubic review --base $(comms trunk) --json
 # sem --base, revisa o que está uncommitted; --prompt combina com --base
 # para instruções extras; --commit <sha> revisa um commit específico
 ```
 
 Validar cada finding antes de corrigir — a CLI erra como qualquer review — e
 repetir no máximo uma vez. Corrigir o que for correção real; o resto vira
-work_item com prefixo de severidade, para o `./comms.py gate` cobrar destino.
+work_item com prefixo de severidade, para o `comms gate` cobrar destino.
 
 Se o Cubic não estiver instalado, autenticado, ou bater rate limit, **registrar
 o skip** no canal e seguir — mas não passar calado, que é o oposto da política:
 
 ```bash
-./comms.py post --de dev --para reviewer --tipo gate \
+comms post --de dev --para reviewer --tipo gate \
   --titulo "G3 sem Cubic #<N>" --corpo "motivo: <NOT_INSTALLED|auth|rate limit>"
 ```
 
@@ -165,7 +165,7 @@ Rodar se o diff tocar área sensível: auth, billing, purge/TTL, KMS, webhooks,
 mensagens ao usuário final, ou invariantes de arquitetura documentados no repo:
 
 ```bash
-git diff $(./comms.py trunk)...HEAD | ai-review --redact -a balanced -t pr-review \
+git diff $(comms trunk)...HEAD | ai-review --redact -a balanced -t pr-review \
   -s "Review delivery #N; foque regressões e invariantes de arquitetura."
 ```
 
@@ -206,7 +206,7 @@ Após criar o PR com `gh pr create`:
 Rode o comando de conclusão unificada:
 
 ```bash
-./comms.py finish <ISSUE_NUMBER> --pr <PR_URL>
+comms finish <ISSUE_NUMBER> --pr <PR_URL>
 ```
 
 Esse comando executa em 1 único passo:

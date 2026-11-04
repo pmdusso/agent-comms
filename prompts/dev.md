@@ -6,9 +6,9 @@ Você é `dev` neste repositório. Implemente o menor código correto que satisf
 
 1. Leia `AGENTS.md`, `docs/product/prd.md`, `docs/core/AGENT_COMMS.md` e `docs/core/PIPELINE.md`.
 2. Se for explorar código/arquitetura: garanta CLI+skill graphify (bootstrap da seção graphify em `AGENTS.md`) e use `graphify query` antes de Grep/Read amplos.
-3. Execute `./comms.py state` e `./comms.py turns`.
-4. Sincronize o Board via `./comms.py board-sync`.
-5. Abra com `./comms.py show <ID>` os turnos destinados a `dev` ou `todos`.
+3. Execute `comms state` e `comms turns`.
+4. Sincronize o Board via `comms board-sync`.
+5. Abra com `comms show <ID>` os turnos destinados a `dev` ou `todos`.
 6. Trate as mensagens `decisao` do canal como vinculantes; para discordar, poste a `arch` antes de agir.
 
 Card ou handoff ambíguo? Poste uma `pergunta` a quem o enviou ANTES de começar. Se prosseguir com uma premissa, registre-a no canal.
@@ -17,18 +17,18 @@ Card ou handoff ambíguo? Poste uma `pergunta` a quem o enviou ANTES de começar
 
 ```bash
 # 1. Puxar card Ready para desenvolvimento (Board -> In progress + Worktree + comms.db):
-./comms.py start <ISSUE_NUMBER>
+comms start <ISSUE_NUMBER>
 
 # 2. Entrar na worktree criada e implementar o plano:
 cd .worktrees/issue-<N>-<slug>
 
 # 3. Rodar suíte local de testes e linters:
-$(./comms.py testcmd)   # make test / uv run pytest / npm test — conforme o repo
+$(comms testcmd)   # make test / uv run pytest / npm test — conforme o repo
 
 # 4. Criar o PR e finalizar a entrega (Board -> In review + Comentário GitHub + comms.db):
 git push -u origin HEAD
 gh pr create --title "..." --body "..."
-./comms.py finish <ISSUE_NUMBER> --pr "https://github.com/dono/repo/pull/<N>"
+comms finish <ISSUE_NUMBER> --pr "https://github.com/dono/repo/pull/<N>"
 ```
 
 ## Limites
@@ -43,7 +43,7 @@ gh pr create --title "..." --body "..."
 
 - Suíte já vermelha ao pegar o card → poste `bloqueio` a `arch` com a evidência; não conserte silenciosamente.
 - Após 3 tentativas falhas no mesmo obstáculo, poste `bloqueio` e pare — condição contável, não sensação.
-- Pronto = suíte verde na worktree, PR aberto, `./comms.py finish` executado, turno de origem resolvido e handoff postado no template — `Objetivo:`, `Critérios:` atendidos com evidência (comando + saída resumida), `Fronteiras:` respeitadas — mais arquivos alterados, alternativas rejeitadas e riscos restantes.
+- Pronto = suíte verde na worktree, PR aberto, `comms finish` executado, turno de origem resolvido e handoff postado no template — `Objetivo:`, `Critérios:` atendidos com evidência (comando + saída resumida), `Fronteiras:` respeitadas — mais arquivos alterados, alternativas rejeitadas e riscos restantes.
 - Antes do post final, releia este prompt e confirme que respeitou os Limites.
 
 Comece sincronizando o estado e implemente apenas o item atribuído.

@@ -1,216 +1,177 @@
 # Agent Comms & Orchestration Infrastructure
 
-**Agent Comms** é a infraestrutura de comunicação, orquestração, skills de pipeline e gates de qualidade para agentes AI de programação (Antigravity, Gemini CLI, Claude Code, Cursor, Codex).
+**Agent Comms** é a infraestrutura de comunicação, orquestração, skills de pipeline e gates de qualidade para agentes AI de programação.
 
-Portável por construção: nenhum ID de repositório ou de GitHub Project vive no código — tudo é resolvido pela API do `gh` em tempo de execução.
+O engine `comms` é um binário Rust global. O estado operacional fica em SQLite (`comms.db`); o GitHub Projects Board continua sendo o canal humano oficial. Nenhum ID de repositório ou de Project fica embutido no código: as chamadas GraphQL do `gh` resolvem os IDs em runtime.
 
-Ela permite rodar sessões multi-agente eficientes, paralelas e determinísticas, com **dupla camada de sincronia** entre o trabalho humano (GitHub Projects Board) e o canal operacional local (`comms.db`).
+## Recursos
 
----
+- Turnos, decisões, bloqueios, handoffs, work items e chaves de estado em SQLite WAL.
+- Roster versionado em `docs/prompts/*.md` mais personas ad-hoc registradas no banco.
+- `start`/`finish` integrando Board, worktrees, handoffs e gates.
+- Saída texto para humanos e `--json` global com erros estruturados para agentes.
+- Skills `discovery` e `delivery`, sem duplicar esses fluxos como remetentes do canal.
+- Gate executável: findings abertas ou débito incompatível com a severidade reprovam o comando.
 
-## 🌟 Recursos Principais
-
-- 🔄 **Orquestração Unificada:** Comandos CLI únicos (`./comms.py start`, `./comms.py finish`, `./comms.py board-sync`) que automatizam movimentação de cards no Board, criação de Git Worktrees efêmeros e registros de handoff.
-- 🗄️ **Banco SQLite Durável (`comms.db`):** Armazena turnos, decisões, bloqueios, itens pendentes e históricos de gates entre personas de agentes sem poluir o repositório Git.
-- 🛠️ **Skills Autónomas de Pipeline:**
-  - **`discovery`:** Automação do funil F1→F2 (Backlog ➔ Ready). Triagem, alinhamento, especificação, invariantes e publicação do card como `Ready`.
-  - **`delivery`:** Automação do funil F3→F5 (Ready ➔ In review / PR). Worktree efêmera, ciclo TDD/testes, review de código com Cubic, abertura de PR e movimentação do board.
-
-- 🎭 **Prompts de Personas Especializadas:**
-  - `arch.md`: Arquiteto responsável pelas decisões de design, invariantes e diretivas.
-  - `pm.md`: Product Manager responsável pelos refinamentos de backlog e PRD.
-  - `dev.md`: Desenvolvedor focado em implementação limpa e sem over-engineering.
-  - `tester.md`: Validador de testes e garantidor do piso de cobertura de testes.
-  - `reviewer.md`: Auditor independente de qualidade e busca de regressões.
-  - `gatekeeper.md`: Validador final de CI, PRs e autorização de merge.
-
-  Esta lista é o padrão, não um limite: o roster é o diretório, e um `.md` novo
-  já é um agente. Veja [Roster de agentes](#-roster-de-agentes-onboarding-ad-hoc).
-
-- 🚦 **Gates com critério executável:** `./comms.py gate` sai com código 1 se
-  alguma finding de review ficou sem destino — aberta, ou marcada como débito
-  contra a política de severidade. Serve em CI e em pre-push.
-
----
-
-## 📂 Estrutura do Repositório Exportado
+## Estrutura
 
 ```text
 agent-comms/
-├── comms.py                # Engine CLI principal de orquestração e banco SQLite
-├── install.sh              # Instalação/atualização de 1 linha em novos repositórios
-├── README.md               # Documentação principal
-├── skills/                 # Skills autónomas registradas para agentes AI
-│   ├── discovery/          # Skill de Discovery (Backlog -> Ready)
-│   └── delivery/           # Skill de Delivery (Ready -> In review / PR)
-├── prompts/                # UM ARQUIVO = UM AGENTE. Este diretório É o roster.
-│   ├── arch.md
-│   ├── dev.md
-│   ├── gatekeeper.md
-│   ├── pm.md
-│   ├── reviewer.md
-│   └── tester.md
-└── docs/                   # Especificações de protocolo e guiagem
-    └── SETUP_GUIDE.md      # Guia de instalação e configuração rápida
-                            # AGENT_COMMS.md e PIPELINE.md são GERADOS pelo
-                            # bootstrap, a partir dos templates no comms.py
+├── Cargo.toml              # Pacote comms v5.0.0
+├── Cargo.lock              # Dependências reproduzíveis
+├── src/                    # CLI, SQLite, roster, saída, Git e GitHub
+├── templates/              # Manual, pipeline e prompt ad-hoc embutidos
+├── tests/                  # Integração, regressões e lint documental
+├── install.sh              # Build, instalação e upgrade
+├── prompts/                # Roster padrão: um arquivo por agente
+├── skills/
+│   ├── discovery/
+│   └── delivery/
+└── docs/
+    └── SETUP_GUIDE.md
 ```
 
-Discovery e delivery vivem só em `skills/` — não há prompt duplicando esses
-funis. São workflows executados por `arch`/`pm`/`dev`, não remetentes do canal.
+`docs/core/AGENT_COMMS.md` e `docs/core/PIPELINE.md` são gerados no repositório de destino pelos templates embutidos no binário.
 
----
+## Instalação
 
-## 📦 Como Instalar em um Novo Projeto
-
-Para equipar qualquer repositório existente ou novo com a infraestrutura de comunicação e skills:
+Pré-requisitos: Rust/Cargo via `rustup` e GitHub CLI `gh` autenticado.
 
 ```bash
+rustup toolchain install stable --profile default
 git clone git@github.com:pmdusso/agent-comms.git ~/code/shared/agent-comms
 ~/code/shared/agent-comms/install.sh /caminho/do/seu-projeto
 ```
 
-O instalador vai:
-1. Copiar `comms.py` para a raiz do seu repositório.
-2. Copiar os prompts para `docs/prompts/` e o `SETUP_GUIDE.md` para `docs/core/`.
-3. Instalar as skills `discovery` e `delivery` em `.claude/skills/`, com symlink em `.cursor/skills/` e `.agents/skills/`.
-4. Rodar `comms.py bootstrap`: cria o `comms.db` (WAL), gera `docs/core/AGENT_COMMS.md` e `docs/core/PIPELINE.md` refletindo os `SENDERS`/`ROLES` daquele repositório, e adiciona o banco ao `.gitignore`.
+O installer:
 
-Documentos já existentes nunca são sobrescritos pelo bootstrap.
+1. Executa `cargo build --release --locked` e instala `comms` em `~/.local/bin` (ou em `COMMS_BIN_DIR`).
+2. Copia os prompts e o guia, instala as skills em `.claude/skills/` e cria symlinks em `.cursor/skills/` e `.agents/skills/`.
+3. Executa `comms bootstrap` e `comms migrate` no destino.
+4. Avisa se o diretório do binário não estiver no `PATH` e lista instruções locais que ainda chamam o engine antigo.
 
----
+Para atualizar uma instalação que ainda contém o script Python legado, é obrigatório usar `--update`: o installer remove esse script, regera os manuais e mantém as versões anteriores no Git. Sem essa flag, ele sai antes de copiar qualquer arquivo.
 
-## 👥 Roster de agentes (onboarding ad-hoc)
+## Qual `comms.db`?
 
-**O roster é `docs/prompts/`.** Um arquivo `.md` = um agente autorizado a postar no
-canal. Subir um agente novo no meio da sessão não exige editar código nem recriar o
-banco:
+A descoberta parte do diretório atual:
 
-```bash
-cp docs/prompts/dev.md docs/prompts/dba.md   # e edite o prompt
-./comms.py agents                            # roster + turnos por agente
-./comms.py post --de dba --para arch --tipo pergunta --titulo "..." --corpo "..."
-```
+1. `COMMS_DB` não vazio tem precedência; caminho relativo é resolvido contra o diretório atual.
+2. Sem override, o `comms` localiza a raiz Git principal sem spawn, inclusive ao entrar por uma worktree ligada.
+3. Ele sobe da raiz Git (ou do diretório atual fora de Git) até a raiz do filesystem e usa o primeiro `comms.db` encontrado.
+4. Sem banco, comandos que dependem dele falham com `db_missing`; apenas `bootstrap` ou um banco explícito em `COMMS_DB` pode criá-lo.
 
-`sender`, `recipient` e `work_items.owner` são `TEXT` sem `CHECK` justamente para o
-roster poder crescer em runtime. A proteção contra typo fica no argparse, que relê o
-roster a cada invocação — `--de dvv` continua sendo rejeitado listando os válidos.
+`trunk` e `testcmd` não exigem banco. `trunk`, `testcmd` e `start` operam na raiz Git principal do diretório atual. O `bootstrap` grava banco, `docs/core/` e `.gitignore` no diretório do banco, não necessariamente no diretório de onde foi chamado.
 
-`human` está sempre no roster (é gente, não tem prompt) e `todos` só existe como
-destinatário. `kind` e `status` seguem fechados por `CHECK`: são política, não roster.
+## Roster de agentes
 
-**Bancos criados antes da v4** congelam o roster no DDL e rejeitam agentes novos:
+O roster é a união de duas fontes:
+
+- **Padrão, versionado:** `docs/prompts/<nome>.md`; editar a persona é editar o arquivo.
+- **Ad-hoc, em runtime:** linhas da tabela `agents` do `comms.db`, sem alterar o repositório.
+
+Se o mesmo nome existir nas duas fontes, o arquivo vence e `comms agents` mostra o conflito. `human` sempre entra no roster; `todos` é apenas destinatário e `cross` apenas escopo.
 
 ```bash
-./comms.py migrate    # remove os CHECKs preservando turnos e work items
+comms agents
+comms agent-add dba --descricao "tuning de queries e índices" --por arch
+comms agent-add dev-front --descricao "..." --por arch --prompt-file prompt.md
+comms brief dba
+comms agent-show dba --adhoc
+comms agent-set dba --prompt-file novo.md
+comms agent-rm dba                 # preserva turnos e itens históricos
 ```
 
----
-
-## 🎛️ Configuração do Board
-
-Defaults: project `1`, owner `@me`, repo do diretório atual. Nenhum ID é
-hardcoded — `comms.py` resolve project-id, field-id do `Status` e os option-ids
-via `gh project view` / `gh project field-list`. Só configure o que fugir do default:
+Prompts fornecidos precisam das seções `## Antes de agir`, `## Fluxo`, `## Limites` e `## Término`, com no máximo cinco ocorrências de `NUNCA`; `--force` registra uma exceção consciente. Para promover uma persona útil ao padrão:
 
 ```bash
-./comms.py set board.project 3          # número do GitHub Project
-./comms.py set board.owner minha-org    # @me ou org
-./comms.py set board.repo dono/repo     # útil quando o repo não está clonado local
-
-./comms.py board-item <N>               # item-id + coluna atual do card
-./comms.py board-set <N> Ready          # move o card de coluna
+comms agent-show dba --adhoc > dba.md.tmp
+mv dba.md.tmp docs/prompts/dba.md
+comms agent-rm dba
 ```
 
-O board precisa de um campo `Status`; colunas inexistentes retornam erro
-listando as disponíveis.
+Bancos anteriores à v4 podem conter CHECKs de roster. `comms migrate` recria as tabelas preservando turnos e work items. Em repos v2 com papéis embutidos na antiga tupla, esses papéis aparecem como órfãos após o upgrade; registre os que continuam em uso com `comms agent-add <nome> --descricao "..." --por human`.
 
-O branch tronco também não é assumido — sai de `origin/HEAD`, e `./comms.py trunk`
-imprime o nome. Prompts e skills usam `$(./comms.py trunk)` em vez de escrever
-`main`, para funcionarem em repo cujo tronco é `dev`, `master` ou outro:
+## Board GitHub Projects
+
+Defaults: project `1`, owner `@me`, repo do diretório atual. Uma query GraphQL (`gh api graphql`) resolve item, project, campo `Status` e opções por issue; `board-sync` pagina todos os cards, sem o antigo teto de 100.
 
 ```bash
-git diff $(./comms.py trunk)...HEAD
-./comms.py start 42 --base outro-branch   # override pontual
+comms set board.project 3
+comms set board.owner minha-org
+comms set board.repo dono/repo
+comms board-item <N>
+comms board-set <N> Ready
+comms board-sync
 ```
 
-O mesmo vale para a suíte de testes. `./comms.py testcmd` sai do kv `test.cmd`,
-ou da convenção do ecossistema — `Makefile` com alvo `test`, `pyproject.toml`,
-`package.json`, `Cargo.toml`, `go.mod`, nessa ordem. Se não der para inferir, ele
-falha pedindo a configuração em vez de chutar um comando que não existe:
+O Board precisa de um campo `Status` de seleção única. Colunas inexistentes retornam erro com as opções disponíveis.
+
+O tronco vem de `origin/HEAD`, com fallback para branches locais; `comms trunk` evita assumir um nome fixo. A suíte vem do kv `test.cmd` ou das convenções em `Makefile`, `pyproject.toml`, `package.json`, `Cargo.toml` e `go.mod`, nessa ordem:
 
 ```bash
-./comms.py testcmd                        # ex: uv run pytest -q
-./comms.py set test.cmd "just ci"         # repo fora do padrão
+git diff $(comms trunk)...HEAD
+$(comms testcmd)
+comms set test.cmd "just ci"
 ```
 
-Prompts e skills escrevem `$(./comms.py testcmd)` — assim o mesmo prompt roda a
-suíte certa num repo Python, num Node e num Go. O `./comms.py check` reprova se
-um runner fixo (`pytest`, `npm test`, `make test`…) reaparecer nos docs.
-
----
-
-## 💻 Guia Rápido de Comandos CLI (`comms.py`)
-
-### 1. Iniciar Trabalho em um Card
-
-Conecta o card do GitHub Projects, move para `In progress`, cria um Git Worktree efêmero e registra o handoff no `comms.db`:
+## Fluxo de entrega
 
 ```bash
-./comms.py start <ISSUE_NUMBER>
+comms start <ISSUE_NUMBER>
+# implementar o plano e validar na worktree
+$(comms testcmd)
+comms gate --refs issue:42
+git push -u origin HEAD
+gh pr create --title "feat: minha feature (#42)" --body "..."
+comms finish 42 --pr "https://github.com/usuario/repo/pull/123"
 ```
 
-### 2. Concluir Trabalho e Abrir PR
+`start` move o card para `In progress`, cria a worktree quando solicitado e registra work item + handoff na mesma transação. `finish` move para `In review`, conclui apenas refs com o token exato da issue, registra o gate e comenta na issue. Merge e deploy continuam sendo decisões humanas.
 
-Move o card no GitHub Projects para `In review`, comenta na Issue, abre a PR e grava o gate de aprovação no `comms.db`:
+Para subir uma sessão:
 
 ```bash
-./comms.py finish <ISSUE_NUMBER> --pr "https://github.com/usuario/repo/pull/<PR_NUMBER>"
+comms agents
+comms brief dev
+comms turns --para dev
+comms resolve <ID>
 ```
 
-### 3. Sincronizar Board ↔ Banco Local
+## Saída para agentes (`--json`)
 
-Sincroniza os status das issues do GitHub com o `comms.db`:
+A flag global funciona antes ou depois do subcomando. Em sucesso, stdout contém um único documento JSON compacto; avisos entram em `warnings`. Comandos sem documento próprio produzem `{}`.
+
+Em erro, stdout fica vazio e stderr recebe:
+
+```json
+{"error":{"code":"not_found","message":"turno 999 não existe"}}
+```
+
+Códigos de erro estruturados: `usage`, `invalid`, `not_found`, `db_missing`, `guard`, `conflict`, `external` e `internal`. Exit codes:
+
+- `0`: sucesso, inclusive `resolve` de turno já resolvido (com aviso).
+- `1`: erro operacional ou gate reprovado com relatório.
+- `2`: erro de uso, incluindo papel ou escopo desconhecido.
+
+Exemplos:
 
 ```bash
-./comms.py board-sync
+comms --json state
+comms --json show 999
+comms post --de dba --para arch --tipo mensagem --titulo oi --corpo x --json
 ```
 
-### 4. Consultar o Estado Atual
-
-Exibe resumos, itens pendentes e turnos abertos:
+## Desenvolvimento
 
 ```bash
-./comms.py state
-./comms.py turns --para dev     # só o que é do dev (inclui broadcast)
+cargo test
+cargo clippy --all-targets -- -D warnings
+cargo build --release --locked
 ```
 
-### 5. Subir um agente
+A suíte cobre descoberta de banco/worktrees, canal, guards, roster, migração, bootstrap, gate, GitHub com `gh` falso e portabilidade dos documentos. O antigo self-test do CLI foi substituído por esses testes.
 
-`brief` concatena o prompt do agente com o estado do canal e os turnos abertos
-para ele — um blob só, sem precisar de um `show` por turno:
-
-```bash
-./comms.py brief dev                      # para colar
-./comms.py brief dev | claude -p          # ou pipar direto
-```
-
-### 6. Verificar o gate antes do PR
-
-Verifica o critério F4/G3/G4 do PIPELINE — toda finding tem destino. Sai com
-código 1 se alguma estiver `aberto`, se um `[grave]` virou débito, ou se um
-`[medio]` virou débito sem justificativa. Serve em CI e em pre-push:
-
-```bash
-./comms.py gate                  # tudo
-./comms.py gate --refs issue:42  # só o escopo do card
-```
-
-G1/G2 (painel rodou) e G5 (merge humano) não são checáveis daqui — são
-julgamento, e transformá-los em `exit 0` seria fingir rigor.
-
----
-
-## ⚖️ Licença
+## Licença
 
 MIT — veja [LICENSE](LICENSE).
